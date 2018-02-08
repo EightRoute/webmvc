@@ -1,7 +1,7 @@
 package com.webmvc;
 
 /**
- * Created by A550V
+ * Created by sgz
  * 2018/2/6 22:49
  */
 public interface ConfigConstant {
