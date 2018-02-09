@@ -1,9 +1,11 @@
-package com.webmvc.util;
+ package com.webmvc.util;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
+
+import com.webmvc.excepetion.WebMVCException;
 
 
 /**
@@ -24,7 +26,7 @@ public class PropertiesUtil {
 		try {
 			properties.load(propertiesInputStream);
 		} catch (IOException e) {
-			
+			throw new WebMVCException("加载" + classPathConfigFile + "时出现异常", e);
 		}
 		return properties;
 	}
@@ -41,7 +43,7 @@ public class PropertiesUtil {
 			InputStream propertiesInputStream = new FileInputStream(absolutePathConfigFile);
 			properties.load(propertiesInputStream);
 		} catch (IOException e) {
-			
+			throw new WebMVCException("加载" + absolutePathConfigFile + "时出现异常", e);
 		}
 		return properties;
 	}
