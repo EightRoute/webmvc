@@ -34,13 +34,14 @@ public final class BeanHelper {
      * @param name bean的名字
      * @return 从bean容器中获取的对象
      */
-    public static <T> T getBean(String name) {
+    @SuppressWarnings("unchecked")
+	public static <T> T getBean(String name) {
 
         if (! BEAN_MAP.containsKey(name) ) {
             throw new WebMVCException("没有找到所需要的bean" );
         }
         try {
-            return (T) BEAN_MAP.get(name);
+            return ((T) BEAN_MAP.get(name));
         } catch (Exception e) {
             throw new WebMVCException("实例化bean时出错",e);
         }

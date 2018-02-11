@@ -3,7 +3,6 @@ package com.webmvc.util;
 import com.webmvc.excepetion.WebMVCException;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 /**

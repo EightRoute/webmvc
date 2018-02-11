@@ -1,8 +1,6 @@
 package com.webmvc.util;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -14,11 +12,11 @@ public class CollectionUtil {
     /**
      * 判断集合是否为空
      */
-    public static Boolean isNotEmpty(Collection collection) {
+    public static Boolean isNotEmpty(Collection<?> collection) {
        return ! collection.isEmpty();
     }
 
-    public static Boolean isNotEmpty(Map map) {
+    public static Boolean isNotEmpty(Map<?, ?> map) {
         return ! map.isEmpty();
     }
 }
