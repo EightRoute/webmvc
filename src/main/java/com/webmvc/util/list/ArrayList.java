@@ -28,7 +28,7 @@ public class  ArrayList<E> implements List<E>, Serializable{
     private static final Object[] DEFAULTCAPACITY_EMPTY_CAPACITY = {};
 
     /*
-     *
+     * 用来存放集合元素的数组
      */
     Object[] elementData;
 
