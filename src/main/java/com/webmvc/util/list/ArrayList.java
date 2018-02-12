@@ -3,17 +3,22 @@ package com.webmvc.util.list;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.RandomAccess;
+import java.util.function.Consumer;
 
 /**
  * 用来学习java.util.ArrayList<E>
  * Created by sgz
  * 2018/2/10 19:02
+ * RandomAccess属于一种标记接口,一般为数组实现
  */
-public class  ArrayList<E> implements List<E>, Serializable{
+public class  ArrayList<E> implements List<E>, Serializable, RandomAccess, Cloneable{
 
     private static final long serialVersionUID = -8938796252048773961L;
 
@@ -90,6 +95,9 @@ public class  ArrayList<E> implements List<E>, Serializable{
     	}
     }
     
+    /**
+ 	 * 保证数组尺寸足够
+     */
     public void ensureCapacity(int minCapacity) {
     	int minExpend = (elementData != DEFAULTCAPACITY_EMPTY_CAPACITY) ? 0 : DEFAULT_CAPACITY;
     	if (minCapacity > minExpend) {
@@ -98,6 +106,7 @@ public class  ArrayList<E> implements List<E>, Serializable{
     }
     
     private void ensureCapacityInternal(int minCapacity) {
+    	/*如果为首次扩容*/
     	if (elementData == DEFAULTCAPACITY_EMPTY_CAPACITY) {
     		minCapacity = Math.max(minCapacity, DEFAULT_CAPACITY);
     	}
@@ -210,7 +219,7 @@ public class  ArrayList<E> implements List<E>, Serializable{
      */
     @Override
     public boolean add(E e) {
-    	ensureCapacityInternal(size++);
+    	ensureCapacityInternal(size + 1);
     	elementData[size++] = e;
         return true;
     }
@@ -460,23 +469,218 @@ public class  ArrayList<E> implements List<E>, Serializable{
         return -1;
     }
 
+    /**
+     * 返回一个克隆的对象
+     */
+    @Override
+    public Object clone() {
+    	try {
+			ArrayList<?> list = (ArrayList<?>) super.clone();
+			list.elementData = Arrays.copyOf(elementData, size);
+			list.modCount = 0;
+			return list;
+		} catch (CloneNotSupportedException e) {
+			throw new InternalError(e);
+		}
+    }
+    
+    /**
+     * 返回迭代对象
+     */
     @Override
     public Iterator<E> iterator() {
-        return null;
+        return new Itr();
+    }
+    
+    private class Itr implements Iterator<E> {
+    	int cursor; //下一个元素的坐标
+    	int lastRet = -1; //最后一个被返回的元素坐标
+    	int expectedModCount = modCount;
+
+    	/**
+    	 * 是否还有下一个值
+    	 */
+		@Override
+		public boolean hasNext() {
+			return cursor != size;
+		}
+
+		/**
+		 * 取下一个值
+		 */
+		@SuppressWarnings("unchecked")
+		@Override
+		public E next() {
+			checkForComodification();
+			int i = cursor;
+			if (i >= size) {
+				throw new NoSuchElementException("遍历时index溢出");
+			}
+			Object[] elementData = ArrayList.this.elementData;
+			if (size >= elementData.length) {
+				throw new ConcurrentModificationException("遍历时index溢出");
+			}
+			cursor = i + 1;			
+			return (E) elementData[lastRet = i];
+		}
+		
+		/**
+		 * 删除最后一个迭代的目标
+		 */
+		@Override
+		public void remove() {
+			/*还没有开始操作*/
+			if (lastRet < 0) {
+				throw new IllegalStateException();
+			}
+			checkForComodification();
+			
+			ArrayList.this.remove(lastRet);
+			cursor = lastRet;
+			lastRet = -1;
+			expectedModCount = modCount;
+		}
+		
+		/**
+		 * Lambda表达式结合迭代器进行遍历
+		 */
+		@SuppressWarnings("unchecked")
+		@Override
+		public void forEachRemaining(Consumer<? super E> action) {
+			Objects.requireNonNull(action);
+			 final int size = ArrayList.this.size;
+			 int i = cursor;
+			 if (i >= size) {
+	            return;
+	         }
+			 final Object[] elementData = ArrayList.this.elementData;
+	         if (i >= elementData.length) {
+	            throw new ConcurrentModificationException();
+	         }
+	         while (i != size && modCount == expectedModCount) {
+	        	 action.accept((E) elementData[i++]);
+	         }
+	         cursor = i;
+	            lastRet = i - 1;
+	            checkForComodification();
+		}
+		
+		final void checkForComodification() {
+			if (modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
+			}
+		}
+    	
     }
     
     @Override
     public ListIterator<E> listIterator() {
-        return null;
+        return new ListItr(0);
     }
-
+    
     @Override
     public ListIterator<E> listIterator(int index) {
-        return null;
+        if (index > size || index < 0) {
+        	throw new IndexOutOfBoundsException("下标不正确");
+        }
+        return new ListItr(index);
     }
+   
 
+    
+    private class ListItr extends Itr implements ListIterator<E> {
+    	public ListItr(int index) {
+			super();
+			cursor = index;
+		}
+
+    	/**
+    	 * 是否有上一个
+    	 */
+		@Override
+		public boolean hasPrevious() {
+			return cursor != 0;
+		}
+
+		/**
+		 * @return 返回上一个元素
+		 */
+		@SuppressWarnings("unchecked")
+		@Override
+		public E previous() {
+			checkForComodification();
+            int i = cursor - 1;
+            if (i < 0)
+                throw new NoSuchElementException("没有这个元素");
+            Object[] elementData = ArrayList.this.elementData;
+            if (i >= elementData.length)
+                throw new ConcurrentModificationException("并发操作异常");
+            cursor = i;
+            return (E) elementData[lastRet = i];
+		}
+
+		@Override
+		public int nextIndex() {
+			/*将要取而还没取     _ _ _ previous next _ _ _*/
+			return cursor;
+		}
+
+		@Override
+		public int previousIndex() {
+			return cursor - 1;
+		}
+
+		/**
+		 * 将当前坐标的元素设为
+		 */
+		@Override
+		public void set(E e) {
+			if (lastRet < 0)
+                throw new IllegalStateException();
+            checkForComodification();
+
+            try {
+                ArrayList.this.set(lastRet, e);
+            } catch (IndexOutOfBoundsException ex) {
+                throw new ConcurrentModificationException("并发操作异常");
+            }
+		}
+
+		/**
+		 * 添加一个元素到当前坐标下
+		 */
+		@Override
+		public void add(E e) {
+			checkForComodification();
+
+            try {
+                int i = cursor;
+                ArrayList.this.add(i, e);
+                cursor = i + 1;
+                lastRet = -1;
+                expectedModCount = modCount;
+            } catch (IndexOutOfBoundsException ex) {
+                throw new ConcurrentModificationException("并发操作异常");
+            }
+		}
+    	
+    }
+    
+    
+    /**
+     * 返回list的一部分的视图
+     * **************
+     *     *****
+     * **************
+     */
     @Override
     public List<E> subList(int fromIndex, int toIndex) {
-        return null;
+    	List<E> list = new ArrayList<E>();
+    	for (int i = 0; i < size; i++) {
+    		if (i < toIndex && i >= fromIndex) {
+    			list.add(elementData(i));
+    		}
+    	}
+        return list;
     }
 }
