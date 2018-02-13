@@ -395,7 +395,7 @@ public class LinkedList<E> implements List<E>, Deque<E>, Serializable {
     }
 	
 	
-	/*for iterator*/
+	/*因为要反过来迭代所以index <= size*/
 	private boolean isPositionIndex(int index) {
         return index >= 0 && index <= size;
     }
