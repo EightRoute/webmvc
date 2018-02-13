@@ -683,4 +683,50 @@ public class  ArrayList<E> implements List<E>, Serializable, RandomAccess, Clone
     	}
         return list;
     }
+    
+    /*
+     * 在序列化过程中，虚拟机会试图调用对象类里的writeObject() 和readObject()，
+	 * 进行用户自定义的序列化和反序列化，如果没有则调用ObjectOutputStream.defaultWriteObject()
+	 * 和ObjectInputStream.defaultReadObject()
+     */
+    private void writeObject(java.io.ObjectOutputStream s)
+            throws java.io.IOException{
+        // Write out element count, and any hidden stuff
+        int expectedModCount = modCount;
+        s.defaultWriteObject();
+
+        // Write out size as capacity for behavioural compatibility with clone()
+        s.writeInt(size);
+
+        // Write out all elements in the proper order.
+        for (int i=0; i<size; i++) {
+            s.writeObject(elementData[i]);
+        }
+
+        if (modCount != expectedModCount) {
+            throw new ConcurrentModificationException();
+        }
+    }
+    
+    private void readObject(java.io.ObjectInputStream s)
+            throws java.io.IOException, ClassNotFoundException {
+    	elementData = EMPTY_ELEMENTDATA;
+
+        // Read in size, and any hidden stuff
+        s.defaultReadObject();
+
+        // Read in capacity
+        s.readInt(); // ignored
+
+        if (size > 0) {
+            // be like clone(), allocate array based upon size not capacity
+            ensureCapacityInternal(size);
+
+            Object[] a = elementData;
+            // Read in all elements in the proper order.
+            for (int i=0; i<size; i++) {
+                 a[i] = s.readObject();
+            }
+        }
+    }
 }
