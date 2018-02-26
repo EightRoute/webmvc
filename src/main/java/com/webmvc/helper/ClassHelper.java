@@ -1,6 +1,7 @@
 package com.webmvc.helper;
 
 import java.lang.annotation.Annotation;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -90,6 +91,19 @@ public final class ClassHelper {
 		} else {
 			beanMap.put(beanName, clazz);
 		}
+	}
+
+	/**
+	 * @return 所有包含controller注解的类
+	 */
+	public static Set<Class<?>> getControllerClassSet() {
+		Set<Class<?>> classSet = new HashSet<>();
+		for (Class<?> clazz : CLASS_SET) {
+			if (clazz.isAnnotationPresent(Controller.class)) {
+				classSet.add(clazz);
+			}
+		}
+		return classSet;
 	}
 
 }
