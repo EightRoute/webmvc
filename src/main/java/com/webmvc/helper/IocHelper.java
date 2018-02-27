@@ -16,7 +16,7 @@ import java.util.Map;
 public final class IocHelper {
 
     static {
-        System.out.println("----init----");
+        System.out.println("----开始注入----");
         Map<String, Object> beanMap = BeanHelper.getBeanMap();
         if (CollectionUtil.isNotEmpty(beanMap)) {
             for (Map.Entry<String, Object> beanEntry : beanMap.entrySet()) {

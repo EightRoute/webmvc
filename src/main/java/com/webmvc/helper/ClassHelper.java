@@ -41,34 +41,22 @@ public final class ClassHelper {
 	public static Map<String, Class<?>> getBean(){
 		Map<String, Class<?>> beanMap = new ConcurrentHashMap<String, Class<?>>();
 		for (Class<?> clazz : CLASS_SET) {
+			System.out.println("开始扫描bean");
 			if (clazz.isAnnotationPresent(Component.class)) {
-				//  如果clazz不是类似Controller,Serivce,Repository的注解		 
-				if (! clazz.isAnnotation()) {
-					//判断bean是否有默认的name
-					String beanName = clazz.getAnnotation(Component.class).value();
-					loadBean(clazz, beanMap, beanName);
-					continue;
-				}
-				for (Class<?> cla : CLASS_SET) {
-					if (cla.isAnnotationPresent(clazz.asSubclass(Annotation.class))) {
-						String beanName;
-						if (cla.isAnnotationPresent(Controller.class)) {
-							//判断bean是否有默认的name
-							beanName = cla.getAnnotation(Controller.class).value();
-							loadBean(cla, beanMap, beanName);
-						}
-						if (cla.isAnnotationPresent(Service.class)) {
-							//判断bean是否有默认的name
-							beanName = cla.getAnnotation(Service.class).value();
-							loadBean(cla, beanMap, beanName);
-						}
-						if (cla.isAnnotationPresent(Repository.class)) {
-							//判断bean是否有默认的name
-							beanName = cla.getAnnotation(Repository.class).value();
-							loadBean(cla, beanMap, beanName);
-						}
-					}
-				}
+				String beanName = clazz.getAnnotation(Component.class).value();
+				loadBean(clazz, beanMap, beanName);
+			}
+			if (clazz.isAnnotationPresent(Controller.class)) {
+				String beanName = clazz.getAnnotation(Controller.class).value();
+				loadBean(clazz, beanMap, beanName);
+			}
+			if (clazz.isAnnotationPresent(Service.class)) {
+				String beanName = clazz.getAnnotation(Service.class).value();
+				loadBean(clazz, beanMap, beanName);
+			}
+			if (clazz.isAnnotationPresent(Repository.class)) {
+				String beanName = clazz.getAnnotation(Repository.class).value();
+				loadBean(clazz, beanMap, beanName);
 			}
 		}
 		return beanMap;
@@ -76,7 +64,7 @@ public final class ClassHelper {
 	
 	
 	private static void loadBean(Class<?> clazz, Map<String, Class<?>> beanMap, String beanName) {
-		
+		//如果没有默认的名字
 		if (StringUtil.isEmpty(beanName)) {
 			//判断clazz是否实现了接口
 			Class<?>[] fatherInters = clazz.getInterfaces();

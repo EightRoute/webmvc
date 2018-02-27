@@ -7,6 +7,6 @@ package com.webmvc.util;
 public class CastUtil {
 
     public static Long castLong(Object o) {
-        return null;
+        return castLong(o);
     }
 }

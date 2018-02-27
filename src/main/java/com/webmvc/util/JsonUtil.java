@@ -41,4 +41,4 @@ public final class JsonUtil {
         }
         return pojo;
     }
-} 
+}

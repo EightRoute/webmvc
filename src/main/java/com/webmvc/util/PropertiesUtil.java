@@ -17,12 +17,11 @@ public class PropertiesUtil {
 	
 	/**
 	 * 加载classpath下的properties
-	 * @param classpath里的properties文件
 	 * @return Properties
 	 */
 	public static Properties loadClassPathProperties(String classPathConfigFile) {
 		Properties properties = new Properties();
-		InputStream propertiesInputStream = ClassLoader.getSystemResourceAsStream(classPathConfigFile);
+		InputStream propertiesInputStream = Thread.currentThread().getContextClassLoader().getResourceAsStream(classPathConfigFile);
 		try {
 			properties.load(propertiesInputStream);
 		} catch (IOException e) {
@@ -33,7 +32,6 @@ public class PropertiesUtil {
 	
 	/**
 	 * 加载绝对路径下的properties
-	 * @param properties文件的绝对路径
 	 * @return Properties
 	 */
 	

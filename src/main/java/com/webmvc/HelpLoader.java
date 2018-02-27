@@ -20,7 +20,7 @@ public final class HelpLoader {
         };
 
         for (Class<?> clazz : classList) {
-            ClassUtil.loadClass(clazz.getName(), false);
+            ClassUtil.loadClass(clazz.getName(), true);
         }
     }
 
