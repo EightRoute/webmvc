@@ -1,8 +1,5 @@
 package com.webmvc.bean;
 
-import com.webmvc.enums.RequestMethod;
-
-import java.util.Arrays;
 
 /**
  * Created by A550V

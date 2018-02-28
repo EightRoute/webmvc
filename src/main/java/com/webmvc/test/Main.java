@@ -1,7 +1,6 @@
 package com.webmvc.test;
 
 import com.webmvc.bean.Handler;
-import com.webmvc.enums.RequestMethod;
 import com.webmvc.helper.ControllerHelper;
 
 /**
@@ -11,7 +10,7 @@ import com.webmvc.helper.ControllerHelper;
 public class Main {
 
     public static void main(String[] args) {
-        ControllerHelper controllerHelper =  new ControllerHelper();
+       // ControllerHelper controllerHelper =  new ControllerHelper();
         Handler handler = ControllerHelper.getHandler("POST", "/sgz/say");
         System.out.println(handler.getControllerClass().getName());
         System.out.println(handler.getMappingMethod().getName());

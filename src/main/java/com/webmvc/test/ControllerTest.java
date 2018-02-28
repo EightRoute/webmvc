@@ -2,7 +2,6 @@ package com.webmvc.test;
 
 import com.webmvc.annotation.Controller;
 import com.webmvc.annotation.RequestMapping;
-import com.webmvc.enums.RequestMethod;
 
 /**
  * Created by A550V

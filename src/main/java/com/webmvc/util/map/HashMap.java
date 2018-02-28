@@ -2,6 +2,7 @@ package com.webmvc.util.map;
 
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -160,7 +161,85 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 		}
 	}
 	
+	/**
+	 * 初始分配或者容量翻倍
+	 * @return 新的table
+	 */
 	final Node<K, V>[] resize() {
+		Node<K, V>[] oldTab = table;
+		//老的容量
+		int oldCap = (oldTab == null) ? 0 : oldTab.length; 
+		//老阈值
+		int oldThr = threshold;
+		int newCap, newThr = 0;
+		if (oldCap > 0) {
+			//如果已经达到最大容量，则不扩容
+			if (oldCap >= MAXIMUM_CAPACITY) {
+				threshold = Integer.MAX_VALUE;
+				return oldTab;
+			} else if ((newCap = oldCap >> 1) < MAXIMUM_CAPACITY &&
+					oldCap >= DEFAULT_INITIAL_CAPACITY) {
+				//容量翻倍 ↑, 阈值翻倍↓
+				newThr = oldThr << 1;
+			}
+		} else if (oldThr > 0) {
+			newCap = oldThr;
+		} else {
+			//初始分配
+			newCap = DEFAULT_INITIAL_CAPACITY;
+			//阈值 = 容量 * 负载因子
+			newThr = (int) (DEFAULT_INITIAL_CAPACITY * DEFAULT_LOAD_FACTOR);
+		}
+		
+		if (newThr == 0) {
+			float ft = (float)newCap * loadFactor;
+			newThr = (newCap < MAXIMUM_CAPACITY && ft < (float)MAXIMUM_CAPACITY ? 
+					(int)ft : Integer.MAX_VALUE);
+		}
+		threshold = newThr;
+		
+		@SuppressWarnings("unchecked")
+		//创建新的表
+		Node<K, V>[] newTab = (Node<K,V>[])new Node[newCap]; 
+		table = newTab;
+		if (oldTab != null) {
+			for (int j = 0; j < oldCap; ++j) {
+				//遍历老的表,将元素放到新的表中
+				Node<K, V> e;
+				if ((e = oldTab[j]) != null) {
+					oldTab[j] = null; //gc
+					if (e.next == null) {
+						newTab[e.hash & (newCap - 1)] = e;
+					} else if (e instanceof TreeNode) {
+						//TODO
+					} else {
+						Node<K, V> loHead = null, loTail = null;
+						Node<K, V> hiHead = null, hiTail = null;
+						Node<K, V> next;
+						do {
+							next = e.next;
+							if ((e.hash & oldCap) == 0) {
+								if (loTail == null) {
+									loHead = e;
+								} else {
+									loTail.next = e;
+								}
+								loTail = e;
+							} else {
+								if (hiTail == null) {
+									hiHead = e;
+								} else {
+									hiTail.next = e;
+								}
+								hiTail = e;
+							}
+						} while ((e = next) != null);
+						
+					}
+				}
+			}
+		}
+		
 		return null;
 	}
 	
@@ -239,6 +318,28 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 	public Set<Entry<K, V>> entrySet() {
 		// TODO Auto-generated method stub
 		return null;
+	}
+	
+	static final class TreeNode<K, V> extends HashMap.Entr<K, V> {
+		TreeNode<K, V> parent;
+		TreeNode<K, V> left;
+		TreeNode<K, V> right;
+		TreeNode<K, V> prev;
+		boolean red;
+		
+		TreeNode(int hash, K key, V value, Node<K, V> next) {
+			super(hash, key, value, next);
+		}
+		
+	}
+	
+	static class Entr<K, V> extends HashMap.Node<K, V> {
+		Entr<K, V> before, after;
+		
+		Entr(int hash, K key, V value, Node<K, V> next) {
+			super(hash, key, value, next);
+		}
+		
 	}
 
 
