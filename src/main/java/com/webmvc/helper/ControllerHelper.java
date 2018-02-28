@@ -7,10 +7,11 @@ import com.webmvc.enums.RequestMethod;
 import com.webmvc.util.ArrayUtil;
 import com.webmvc.util.CollectionUtil;
 
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Created by A550V
@@ -19,12 +20,27 @@ import java.util.Set;
 public final class ControllerHelper {
     private static final Map<Request, Handler> REQUEST_MAP = new HashMap<>();
 
+    private static final Map<String, List<Field>> REQUEST_AND_RESPONSE_FILEDS = new HashMap<>();
+
     static {
         Set<Class<?>> controllerClassSet = ClassHelper.getControllerClassSet();
         if (CollectionUtil.isNotEmpty(controllerClassSet)) {
-            /*遍历包含controller注解的类*/
+            List<Field> req = new ArrayList<>();
+            List<Field> resp = new ArrayList<>();
+            /*遍历包含controller注解的类，将HttpServletRequest和HttpServletResponse的域添加到集合中*/
             for (Class<?> controllerClass : controllerClassSet) {
                 if (controllerClass.isAnnotationPresent(RequestMapping.class)) {
+                    Field[] fields =  controllerClass.getDeclaredFields();
+                    for (Field field : fields) {
+                        if (field.getType() == HttpServletRequest.class) {
+                            req.add(field);
+                        }
+                        if (field.getType() == HttpServletResponse.class) {
+                            resp.add(field);
+                        }
+                    }
+
+
                     RequestMapping requestMapping = controllerClass.getAnnotation(RequestMapping.class);
                     //类上面的RequestMapping注解
                     RequestMethod[] baseMethods = requestMapping.method();
@@ -41,6 +57,9 @@ public final class ControllerHelper {
                             for (String baseValue : baseValues) {
                                 for (String value : values) {
                                     //将类上的请求路径和方法上的请求路径拼接起来
+                                    if (baseValue.equals("/")) {
+                                        baseValue = "";
+                                    }
                                     String requestPath  = baseValue + value;
                                     RequestMethod[] requestMethods;
                                     if (ArrayUtil.isNotEmpty(method)) {
@@ -62,13 +81,16 @@ public final class ControllerHelper {
                     }
                 }
             }
+            /*将HttpServletRequest和HttpServletResponse存起来等待取到值后注入*/
+            REQUEST_AND_RESPONSE_FILEDS.put("request", req);
+            REQUEST_AND_RESPONSE_FILEDS.put("response", resp);
         }
     }
 
     /**
      * 根据请求路径和方法找到要映射到的类和方法
-     * @param requestMethod
-     * @param requestPath
+     * @param requestMethod 请求的方法类型(如get,post)
+     * @param requestPath 请求路径
      * @return 包含类和方法的Handler
      */
     public static Handler getHandler(String requestMethod, String requestPath) {
@@ -81,5 +103,14 @@ public final class ControllerHelper {
             }
         }
         return null;
+    }
+
+    /**
+     * @return Controller中HttpServletRequest和HttpServletResponse的域
+     * HttpServletRequest的key为request
+     * HttpServletResponse的key为response
+     */
+    public static Map<String, List<Field>> getRequestAndResponseFileds() {
+        return REQUEST_AND_RESPONSE_FILEDS;
     }
 }

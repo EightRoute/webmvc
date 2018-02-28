@@ -1,12 +1,14 @@
 package com.webmvc;
 
+import com.webmvc.annotation.RequestParam;
 import com.webmvc.bean.Data;
 import com.webmvc.bean.Handler;
-import com.webmvc.bean.Param;
 import com.webmvc.bean.View;
+import com.webmvc.excepetion.WebMVCException;
 import com.webmvc.helper.BeanHelper;
 import com.webmvc.helper.ConfigHelper;
 import com.webmvc.helper.ControllerHelper;
+import com.webmvc.helper.ConvertHelp;
 import com.webmvc.util.*;
 
 import javax.servlet.ServletConfig;
@@ -18,13 +20,16 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * Created by A550V
+ * Created by sgz
  * 2018/2/27 19:20
  */
 public class DispatcherServlet extends HttpServlet{
@@ -47,7 +52,37 @@ public class DispatcherServlet extends HttpServlet{
 
     @Override
     protected void service(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        /*获取请求的路径和方法类型*/
+        //给HttpServletRequest和HttpServletResponse注值
+	    Map<String, List<Field>> map = ControllerHelper.getRequestAndResponseFileds();
+        List<Field> requestFields = map.get("request");
+        List<Field> responseFields = map.get("response");
+        if (CollectionUtil.isNotEmpty(requestFields)) {
+            for (Field field :requestFields) {
+                try {
+                    //从bean容器中取对象，保证对象一致
+                    ReflectionUtil.setFiled(BeanHelper.getBean(field.getDeclaringClass().getName()), field, req);
+                } catch (Exception e) {
+                    throw new WebMVCException("给field: "
+                            + field.getDeclaringClass() + "中的"
+                            + field.getName() + "注入HttpServletRequest时出错");
+                }
+            }
+        }
+
+        if (CollectionUtil.isNotEmpty(responseFields)) {
+            for (Field field :responseFields) {
+                try {
+                    ReflectionUtil.setFiled(field.getDeclaringClass().newInstance(), field, resp);
+                } catch (Exception e) {
+                    throw new WebMVCException("给field: "
+                            + field.getDeclaringClass() + "中的"
+                            + field.getName() + "注入HttpServletResponse时出错");
+                }
+            }
+        }
+
+
+	    /*获取请求的路径和方法类型*/
         String requestMethod = req.getMethod().toLowerCase();
         String requestPath = req.getPathInfo();
         /*获取处理器*/
@@ -92,11 +127,37 @@ public class DispatcherServlet extends HttpServlet{
                     }
                 }
             }
-            Param param = new Param(paramMap);
             /*请求要执行的方法*/
             Method mappingMethod = handler.getMappingMethod();
+            /*获取参数*/
+            Parameter[] parameters = mappingMethod.getParameters();
+            Object[] pars = null;
+            int i = 0;
+            if (ArrayUtil.isNotEmpty(parameters)) {
+                pars = new Object[parameters.length];
+                for (Parameter p : parameters) {
+                    if (p.isAnnotationPresent(RequestParam.class)) {
+                        RequestParam rq = p.getAnnotation(RequestParam.class);
+                        /*获取注解上的值*/
+                        String v = rq.value();
+                        boolean required = rq.required();
+                        String defaultValue = rq.defaultValue();
 
-            Object result = ReflectionUtil.invokeMethod(controllerBean, mappingMethod, null);
+                        Object requestValue = paramMap.get(v);
+                        if (requestValue != null){
+                            pars[i++] = ConvertHelp.convert(requestValue.toString(), p.getType());
+                        } else {
+                            if (required) {
+                                pars[i++] = ConvertHelp.convert(defaultValue, p.getType());
+                            } else {
+                                pars[i++] = null;
+                            }
+                        }
+                    }
+                }
+            }
+
+            Object result = ReflectionUtil.invokeMethod(controllerBean, mappingMethod, pars);
 
             if (result instanceof View) {
                 //返回jsp

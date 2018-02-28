@@ -6,11 +6,13 @@ import com.webmvc.util.ArrayUtil;
 import com.webmvc.util.CollectionUtil;
 import com.webmvc.util.ReflectionUtil;
 
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import java.lang.reflect.Field;
 import java.util.Map;
 
 /**
- * Created by A550V
+ * Created by sgz
  * 2018/2/10 22:49
  */
 public final class IocHelper {
@@ -24,8 +26,10 @@ public final class IocHelper {
                 Field[] beanFileds = beanObject.getClass().getDeclaredFields();
                 if (ArrayUtil.isNotEmpty(beanFileds)) {
                     for (Field beanFiled : beanFileds) {
-                       /*找出含有Autowire注解的域*/
-                        if (beanFiled.isAnnotationPresent(Autowire.class)) {
+                       /*找出含有Autowire注解的域，排除HttpServletResponse和HttpServletRequest*/
+                        if (beanFiled.isAnnotationPresent(Autowire.class)
+                                && beanFiled.getType() != HttpServletResponse.class
+                                && beanFiled.getType() != HttpServletRequest.class) {
                             String filedName = beanFiled.getName();
                             Class<?> filedClass = beanFiled.getType();
                             Object valueObject;
