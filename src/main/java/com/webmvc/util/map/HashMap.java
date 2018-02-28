@@ -243,6 +243,15 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 		return null;
 	}
 	
+	/**
+	 * 
+	 * @param hash 用来确定数组下标
+	 * @param key 键
+	 * @param value 值
+	 * @param onlyIfAbsent 如果存在值则不改变
+	 * @param evict
+	 * @return 原来的值
+	 */
 	final V putVal(int hash, K key, V value,
 			boolean onlyIfAbsent, boolean evict) {
 		return null;
