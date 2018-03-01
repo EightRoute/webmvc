@@ -14,7 +14,7 @@ public class ConvertHelp {
      * @param clazz 要转化成的类型
      * @return 转化好的结果
      */
-    public static  Object convert(String o, Class clazz) {
+    public static  Object convert(String o, Class<?> clazz) {
 
         if (clazz == Integer.class || clazz == int.class) {
             return Integer.parseInt(o);

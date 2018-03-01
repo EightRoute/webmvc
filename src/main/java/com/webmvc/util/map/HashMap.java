@@ -2,10 +2,10 @@ package com.webmvc.util.map;
 
 import java.io.Serializable;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+
 
 
 public class HashMap<K, V> extends AbstractMap<K, V> 
@@ -20,10 +20,19 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 	/*默认扩容参数,代表了table的填充度有多少*/
 	static final float DEFAULT_LOAD_FACTOR = 0.75F;
 	
+	//当桶中元素个数超过这个值时，需要使用红黑树节点替换链表节点
+	//这个值必须为 8，要不然频繁转换效率也不高
 	static final int TREEIFY_THRESHOLD = 8;
 	
+	//一个树的链表还原阈值
+	//当扩容时，桶中元素个数小于这个值，就会把树形的桶元素 还原（切分）为链表结构
+	//这个值应该比上面那个小，至少为 6，避免频繁转换
 	static final int UNTREEIFY_THRESHOLD = 6;
 	
+	//哈希表的最小树形化容量
+	//当哈希表中的容量大于这个值时，表中的桶才能进行树形化
+	//否则桶内元素太多时会扩容，而不是树形化
+	//为了避免进行扩容、树形化选择的冲突，这个值不能小于 4 * TREEIFY_THRESHOLD
 	static final int MIN_TREEIFY_CAPACITY = 64;
 	
 	static class Node<K, V> implements Map.Entry<K, V> {
@@ -85,6 +94,8 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 	static final int hash(Object key) {
 		int h;
 		/*无符号的右移>>>,按照二进制把数字右移指定数位，高位直接补零，低位移除*/
+		//移位为了分布的更均匀
+		//需要重写hashcode原因
 		return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
 	}
 	
@@ -234,7 +245,7 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 								hiTail = e;
 							}
 						} while ((e = next) != null);
-						
+						//TODO
 					}
 				}
 			}
@@ -250,12 +261,108 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 	 * @param value 值
 	 * @param onlyIfAbsent 如果存在值则不改变
 	 * @param evict
-	 * @return 原来的值
+	 * @return 原来的值或null
 	 */
 	final V putVal(int hash, K key, V value,
 			boolean onlyIfAbsent, boolean evict) {
+		Node<K, V>[] tab;
+		Node<K, V> p;
+		int n, i;
+		/*如果为初始状态*/
+		if ((tab = table) == null || (n = tab.length) == 0) {
+			n = (tab = resize()).length;
+		}
+		/*如果链表为空,元素将插入到数组的(n - 1) & hash的位置,*/
+		if ((p = tab[i = (n - 1) & hash]) == null) {
+			tab[i] = newNode(hash, key, value, null);
+		} else {
+			Node<K, V> e; K k;
+			//如果和第一个元素的key就相等
+			if (p.hash == hash 
+				&& ((k = p.key) == key || (key != null && key.equals(k)))) {
+				e = p;
+			} else if (p instanceof TreeNode) {
+				//TODO
+				e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
+			} else {
+				/*遍历链表,如果没有找到相同的key则在最后增加一个Node*/
+				for (int binCount = 0; ;++binCount) {
+					if ((e = p.next) == null) {
+						p.next = newNode(hash, key, value, null);
+						//遍历table[i]，判断链表长度是否大于TREEIFY_THRESHOLD(默认值为8)，大于8的话把链表转换为红黑树，在红黑树中执行插入操作，否则进行链表的插入操作
+						if (binCount >= TREEIFY_THRESHOLD - 1) {
+							treeifyBin(tab, hash);
+							break;
+						}
+					}
+					//存在相同的key时
+					if (e.hash == hash 
+							&& ((k = e.key) == key || (key != null && key.equals(k)))) {
+						break;
+					}
+					p = e;
+				}		
+			}
+			if (e != null) {
+				V oldValue = e.value;
+				//是否覆盖默认值
+				if (!onlyIfAbsent || oldValue == null) {
+					e.value = value;
+				}
+				afterNodeAccess(e);
+				return oldValue;
+			}
+		}
+		++modCount;
+		if (++size > threshold) {
+			resize();
+		}
+		afterNodeInsertion(evict);
 		return null;
 	}
+	
+	void afterNodeAccess(Node<K, V> p) {}
+	void afterNodeInsertion(boolean evict) { }
+	
+	
+	Node<K, V> newNode(int hash, K key, V value, Node<K, V> next) {
+		return new Node<>(hash, key, value, next);
+	}
+	
+	/*将桶内所有的 链表节点 替换成 红黑树节点*/
+	final void treeifyBin(Node<K, V>[] tab, int hash) {
+		int n, index;
+		Node<K, V> e;
+		//如果桶的长度小于MIN_TREEIFY_CAPACITY则扩容，而不进行树形化
+		if (tab == null || (n = tab.length) < MIN_TREEIFY_CAPACITY) {
+			resize();
+		} else if ((e = tab[index = (n - 1) & hash]) != null) {
+			//红黑树头尾节点
+			TreeNode<K, V> hd = null, tl = null;
+			do {
+				//新建一个树节点,内容和链表节点e相同
+				TreeNode<K, V> p = replacementTreeNode(e, null);
+				if (tl == null) {
+					hd = p;
+				} else {
+					p.prev = tl;
+					tl.next = p;
+				}
+			} while ((e = e.next) != null);
+			//让桶的第一个元素指向新建的红黑树头结点，以后这个桶里的元素就是红黑树而不是链表
+			if ((tab[index] = hd) != null) {
+				hd.treeify(tab);
+			}
+		}
+	}
+	
+	/**
+	 * 将链表节点转换为红黑树节点 
+	 */
+	TreeNode<K, V> replacementTreeNode(Node<K, V> p, Node<K, V> next) {
+		return new TreeNode<K, V>(p.hash, p.key, p.value, next);
+	}
+	
 	
 	@Override
 	public int size() {
@@ -329,7 +436,7 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 		return null;
 	}
 	
-	static final class TreeNode<K, V> extends HashMap.Entr<K, V> {
+	static final class TreeNode<K, V> extends LinkedHashMap.Entry<K, V> {
 		TreeNode<K, V> parent;
 		TreeNode<K, V> left;
 		TreeNode<K, V> right;
@@ -340,16 +447,20 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 			super(hash, key, value, next);
 		}
 		
-	}
-	
-	static class Entr<K, V> extends HashMap.Node<K, V> {
-		Entr<K, V> before, after;
 		
-		Entr(int hash, K key, V value, Node<K, V> next) {
-			super(hash, key, value, next);
+		
+		final TreeNode<K,V> putTreeVal(HashMap<K,V> map, Node<K,V>[] tab,
+	            int h, K k, V v) { 
+			return null;
+		}
+		
+		final void treeify(Node<K, V>[] tab) {
+			
 		}
 		
 	}
+	
 
+	
 
 }
