@@ -1,5 +1,6 @@
 package com.webmvc.helper;
 
+import java.lang.annotation.Annotation;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -87,6 +88,34 @@ public final class ClassHelper {
 		Set<Class<?>> classSet = new HashSet<>();
 		for (Class<?> clazz : CLASS_SET) {
 			if (clazz.isAnnotationPresent(Controller.class)) {
+				classSet.add(clazz);
+			}
+		}
+		return classSet;
+	}
+
+	/**
+	 * 获取某个类或接口的所有子类
+	 * @param superClass 父类
+	 * @return superClass子类的集合
+	 */
+	public static Set<Class<?>> getClassSetBySuper(Class<?> superClass) {
+		Set<Class<?>> classSet = new HashSet<>();
+		for (Class<?> clazz : CLASS_SET) {
+			if (superClass.isAssignableFrom(clazz) && !superClass.equals(clazz)) {
+				classSet.add(clazz);
+			}
+		}
+		return classSet;
+	}
+
+	/**
+	 * 获取带有某个注解的所有类
+	 */
+	public static Set<Class<?>> getClassSetByAnnotation(Class<? extends Annotation> annotationClass) {
+		Set<Class<?>> classSet = new HashSet<>();
+		for (Class<?> clazz : CLASS_SET) {
+			if (clazz.isAnnotationPresent(annotationClass)) {
 				classSet.add(clazz);
 			}
 		}

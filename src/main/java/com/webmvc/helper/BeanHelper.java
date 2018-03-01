@@ -46,4 +46,13 @@ public final class BeanHelper {
             throw new WebMVCException("实例化bean时出错",e);
         }
     }
+
+    /**
+     *  添加bean到容器中
+     * @param beanName bean的名字
+     * @param obj bean对象
+     */
+    public static void setBean(String beanName, Object obj) {
+        BEAN_MAP.put(beanName, obj);
+    }
 }

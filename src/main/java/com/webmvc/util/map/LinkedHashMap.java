@@ -2,6 +2,9 @@ package com.webmvc.util.map;
 
 import java.util.Map;
 
+/**
+ * LinkedHashMap
+ */
 public class LinkedHashMap<K, V> extends HashMap<K, V> 
 		implements Map<K, V>{
 
