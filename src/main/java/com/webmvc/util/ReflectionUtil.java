@@ -22,7 +22,7 @@ public final class ReflectionUtil {
         try {
             instance = clazz.newInstance();
         } catch (Exception e) {
-            throw new WebMVCException("实例化对象时出错", e);
+            throw new WebMVCException("实例化对象时出错," + clazz, e);
         }
         return instance;
     }

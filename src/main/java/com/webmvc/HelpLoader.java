@@ -1,9 +1,6 @@
 package com.webmvc;
 
-import com.webmvc.helper.BeanHelper;
-import com.webmvc.helper.ClassHelper;
-import com.webmvc.helper.ControllerHelper;
-import com.webmvc.helper.IocHelper;
+import com.webmvc.helper.*;
 import com.webmvc.util.ClassUtil;
 
 /**
@@ -15,8 +12,10 @@ public final class HelpLoader {
         Class<?>[] classList = {
                 ClassHelper.class,
                 BeanHelper.class,
+                AopHelper.class,
                 IocHelper.class,
-                ControllerHelper.class
+                ControllerHelper.class,
+
         };
 
         for (Class<?> clazz : classList) {

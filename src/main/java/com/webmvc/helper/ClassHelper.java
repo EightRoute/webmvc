@@ -40,8 +40,9 @@ public final class ClassHelper {
 	 */
 	public static Map<String, Class<?>> getBean(){
 		Map<String, Class<?>> beanMap = new ConcurrentHashMap<String, Class<?>>();
+		System.out.println("开始扫描bean");
 		for (Class<?> clazz : CLASS_SET) {
-			System.out.println("开始扫描bean");
+
 			if (clazz.isAnnotationPresent(Component.class)) {
 				String beanName = clazz.getAnnotation(Component.class).value();
 				loadBean(clazz, beanMap, beanName);
