@@ -88,6 +88,13 @@ public class AspectResolve {
         }
     }
 
+    /**
+     * 生成ProxyBean对象 用来获取代理对象
+     * @param expression Pointcut注解的值
+     * @param method 要增强的方法
+     * @param aspectInstance 切面类的对象
+     * @param s 增强类型 before afterdeng
+     */
     private void resolveMethodAnnotation(String expression, Method method, Object aspectInstance, String s) {
         if (isPointcutExpression(expression)) {
             PointcutBean pointcutBean = resolveExpression(expression);

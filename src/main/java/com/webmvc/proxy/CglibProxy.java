@@ -1,12 +1,10 @@
 package com.webmvc.proxy;
 
-/**
- * Created by A550V
- * 2018/3/5 20:24
- */
+
 import java.lang.reflect.Method;
 import java.util.List;
 
+import com.webmvc.excepetion.WebMVCException;
 import com.webmvc.proxy.bean.MethodParameter;
 import com.webmvc.proxy.bean.ProxyBean;
 import com.webmvc.util.CollectionUtil;
@@ -14,6 +12,10 @@ import net.sf.cglib.proxy.Enhancer;
 import net.sf.cglib.proxy.MethodInterceptor;
 import net.sf.cglib.proxy.MethodProxy;
 
+/**
+ * Created by A550V
+ * 2018/3/5 20:24
+ */
 public class CglibProxy {
 
     //要被代理的对象
@@ -34,6 +36,9 @@ public class CglibProxy {
         this.afterReturningMethodParameters = proxyBean.getAfterReturningMethodParameters();
     }
 
+    /**
+     * @return 生成的代理对象
+     */
     public Object getProxy() {
         Enhancer enhancer = new Enhancer();
         enhancer.setSuperclass(targetObject.getClass());
@@ -84,7 +89,7 @@ public class CglibProxy {
                         try {
                             m.invoke(instance, args);
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            throw new WebMVCException("调用方法时出错， method: " + m.getName(), e);
                         }
                     }
                 }
