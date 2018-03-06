@@ -13,7 +13,10 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 	
 	private static final long serialVersionUID = 2772224917432192756L;
 
-	/*初始化容量,1 << 4,必须为2的倍数*/
+	/*初始化容量,1 << 4,必须为2的倍数
+	 * 如果length为2的次幂  则length-1 转化为二进制必定是11111……的形式，
+	 * 在于h的二进制与操作效率会非常的快，而且空间不浪费
+	 */
 	static final int DEFAULT_INITIAL_CAPACITY = 16;
 	/*最大容量, 1 << 30*/
 	static final int MAXIMUM_CAPACITY = 1073741824;
@@ -94,8 +97,9 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 	static final int hash(Object key) {
 		int h;
 		/*无符号的右移>>>,按照二进制把数字右移指定数位，高位直接补零，低位移除*/
-		//移位为了分布的更均匀
+		// 移位为了分布的更均匀
 		//需要重写hashcode原因
+		//(h >>> 16)扰动函数 混合原始哈希码的高位和低位，以此来加大低位的随机性
 		return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
 	}
 	
@@ -273,6 +277,8 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 			n = (tab = resize()).length;
 		}
 		/*如果链表为空,元素将插入到数组的(n - 1) & hash的位置,*/
+		// i = (n - 1) & hash  简化了以前的indexFor方法
+		//为什么长度要2次幂的原因 2次幂时 length - 1的二进制为1111 &运算时不会浪费数组空间
 		if ((p = tab[i = (n - 1) & hash]) == null) {
 			tab[i] = newNode(hash, key, value, null);
 		} else {
@@ -436,6 +442,14 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 		return null;
 	}
 	
+	/*
+	 * 红黑树
+	 * 1根节点为黑色
+	 * 2节点要么是红色 要么是黑色
+	 * 3对于每个节点，从该点至null（树尾端）的任何路径，都含有相同个数的黑色节点
+	 * 4红色节点不能连续
+	 * 5新增的节点都是红色
+	 */
 	static final class TreeNode<K, V> extends LinkedHashMap.Entry<K, V> {
 		TreeNode<K, V> parent;
 		TreeNode<K, V> left;
@@ -447,7 +461,35 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 			super(hash, key, value, next);
 		}
 		
+		//返回树的根节点
+		final TreeNode<K, V> root() {
+			//是否存在父节点
+			for (TreeNode<K, V> r = this,p ;;) {
+				if ((p = r.parent) == null) {
+					return r;
+				}
+				r = p;
+			}
+		}
 		
+		//将树的根节点放进桶中
+		//如果要开启断言检查，则需要用开关-enableassertions或-ea来开启
+		static <K, V> void moveRootToFront(Node<K, V>[] tab, TreeNode<K, V> root){
+			
+		}
+		
+		final TreeNode<K, V> find(int h, Object k, Class<?> kc) {
+			return null;
+		}
+		
+		final TreeNode<K, V> getTreeNode(int h, Object k) {
+			return ((parent != null) ? root() : this).find(h, k, null);
+		}
+		
+		static int tieBreakOrder(Object a, Object b) {
+			return 0;
+		}
+ 		
 		
 		final TreeNode<K,V> putTreeVal(HashMap<K,V> map, Node<K,V>[] tab,
 	            int h, K k, V v) { 
@@ -457,6 +499,40 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 		final void treeify(Node<K, V>[] tab) {
 			
 		}
+		
+		final Node<K, V> untreeify(HashMap<K, V> map) {
+			return null;
+		}
+		
+		final void removeTreeNode(HashMap<K, V> map, Node<K, V>[] tab, boolean movable) {
+			
+		}
+		
+		final void split(HashMap<K, V> map, Node<K, V>[] tab, int index, int bit) {
+			
+		}
+		
+		static <K, V> TreeNode<K, V> rotateLeft(TreeNode<K, V> root, TreeNode<K, V> p) {
+			return null;
+		}
+		
+		static <K, V> TreeNode<K, V> rotateRight(TreeNode<K, V> root, TreeNode<K, V> p) {
+			return null;
+		}
+		
+		static <K, V> TreeNode<K, V> balanceInsertion(TreeNode<K, V> root, TreeNode<K, V> x) {
+			return null;
+		}
+		
+		static <K, V> TreeNode<K, V> balanceDeletion(TreeNode<K, V> root, TreeNode<K, V> x) {
+			return null;
+		}
+		
+		static <K, V> boolean checkInvariants(TreeNode<K, V> t) {
+			return false;
+		}
+		
+		
 		
 	}
 	

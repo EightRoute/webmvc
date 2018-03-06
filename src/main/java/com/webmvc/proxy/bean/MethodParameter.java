@@ -9,12 +9,14 @@ import java.lang.reflect.Method;
  */
 public class MethodParameter {
 
-    //切面
+    //切面里的方法
     private Method adviceMethod;
+    //切面对象  用来反射调用上面的adviceMethod
     private Object adviceObjectInstance;
 
-    //切点
+    //要增强的目标方法名字
     private String targetMethodName;
+    //要增强的目标方法返回类型
     private String targetMethodReturnType;
 
 

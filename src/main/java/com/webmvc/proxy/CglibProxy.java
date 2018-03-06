@@ -15,6 +15,11 @@ import net.sf.cglib.proxy.MethodProxy;
 /**
  * Created by A550V
  * 2018/3/5 20:24
+ * 使用cglib生成代理对象
+ * cglib使用继承 JDK使用接口  JDK需要接口
+ * cglib生成的代理类继承自被代理类/目标类，请求时，执行自己织入的增强，
+ * 然后再执行目标方法，因而使用继承方式创建代理类不能代理任何final方法和类，
+ * 以及静态方法
  */
 public class CglibProxy {
 
