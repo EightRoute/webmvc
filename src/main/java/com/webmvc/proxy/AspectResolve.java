@@ -136,6 +136,7 @@ public class AspectResolve {
         }
     }
 
+    //偷个懒
     private void addMethodParameter(ProxyBean proxyBean, String s, MethodParameter methodParameter) {
         if (s.equals("before")) {
             proxyBean.addBeforeMethodParameter(methodParameter);

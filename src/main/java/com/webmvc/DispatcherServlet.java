@@ -1,9 +1,9 @@
 package com.webmvc;
 
 import com.webmvc.annotation.RequestParam;
-import com.webmvc.bean.Data;
+import com.webmvc.annotation.ResponseBody;
 import com.webmvc.bean.Handler;
-import com.webmvc.bean.View;
+import com.webmvc.bean.ModelAndView;
 import com.webmvc.excepetion.WebMVCException;
 import com.webmvc.helper.BeanHelper;
 import com.webmvc.helper.ConfigHelper;
@@ -158,11 +158,12 @@ public class DispatcherServlet extends HttpServlet{
             }
 
             Object result = ReflectionUtil.invokeMethod(controllerBean, mappingMethod, pars);
-
-            if (result instanceof View) {
+            //是否包含ResponseBody注解
+            boolean ResponseBody =  mappingMethod.isAnnotationPresent(ResponseBody.class);
+            if ( ! ResponseBody) {
                 //返回jsp
-                View view = (View) result;
-                String path = view.getPath();
+                ModelAndView view = (ModelAndView) result;
+                String path = view.getView();
                 if (StringUtil.isNotEmpty(path)) {
                     if (path.startsWith("/")) {
                         resp.sendRedirect(req.getContextPath() + path);
@@ -174,10 +175,9 @@ public class DispatcherServlet extends HttpServlet{
                         req.getRequestDispatcher(ConfigHelper.getAppJspPath() + path).forward(req, resp);
                     }
                 }
-            } else if (result instanceof Data) {
+            } else {
                 //直接返回json
-                Data data = (Data) result;
-                Object model = data.getModel();
+                Object model =  result;
                 if (model != null) {
                     resp.setContentType("application/json"); //TODO
                     resp.setCharacterEncoding("UTF-8");

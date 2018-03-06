@@ -8,6 +8,7 @@ import java.lang.annotation.Target;
 /**
  * Created by A550V
  * 2018/3/1 21:20
+ * 还没用上
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
