@@ -1,10 +1,15 @@
 package com.webmvc.util.map;
 
 import java.io.Serializable;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.AbstractSet;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 
 
 
@@ -156,6 +161,9 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 		putMapEntries(m, false);
 	}
 	
+	/**
+	 * 插入一个map
+	 */
 	final void putMapEntries(Map<? extends K, ? extends V> m, boolean evict) {
 		int s = m.size();
 		if (s > 0) {
@@ -230,7 +238,9 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 						//如果为红黑树
 						((TreeNode<K, V>)e).split(this, newTab, j, oldCap);
 					} else {
+						//不需要改变位置的链表
 						Node<K, V> loHead = null, loTail = null;
+						//需要改变位置的链表
 						Node<K, V> hiHead = null, hiTail = null;
 						Node<K, V> next;
 						do {
@@ -239,7 +249,6 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 							//当(e.hash & oldCap) == 0 痛的位置不需要改变
 							// oldcap 00010000 oldcap-1 00001111  newcap-1 00011111  
 							// hash   11101111          11101111           11101111
-							// 假设e.hash = 32 oldcap = 15 -> 32/15 = 2 32/16 = 0 32/30 = 2
 							if ((e.hash & oldCap) == 0) {
 								if (loTail == null) {
 									loHead = e;
@@ -260,6 +269,9 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 							loTail.next = null;
 							newTab[j] = loHead;
 						}
+						//假设hash为48 oldcap为16 
+						//110000 110000
+						//001111 011111 老的位置为0 新的为16
 						if (hiTail != null) {
 							hiTail.next = null;
 							newTab[j + oldCap] = hiHead;
@@ -302,7 +314,6 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 				&& ((k = p.key) == key || (key != null && key.equals(k)))) {
 				e = p;
 			} else if (p instanceof TreeNode) {
-				//TODO
 				e = ((TreeNode<K,V>)p).putTreeVal(this, tab, hash, key, value);
 			} else {
 				/*遍历链表,如果没有找到相同的key则在最后增加一个Node*/
@@ -342,8 +353,8 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 	}
 	
 	void afterNodeAccess(Node<K, V> p) {}
-	void afterNodeInsertion(boolean evict) { }
-	
+	void afterNodeInsertion(boolean evict) {}
+	void afterNodeRemoval(Node<K, V> p) {}
 	
 	Node<K, V> newNode(int hash, K key, V value, Node<K, V> next) {
 		return new Node<>(hash, key, value, next);
@@ -386,65 +397,219 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 		return new TreeNode<K, V>(p.hash, p.key, p.value, next);
 	}
 	
-	
+	/**
+	 * 一共都多少对key-value
+	 */
 	@Override
 	public int size() {
-		// TODO Auto-generated method stub
-		return 0;
+		return size;
 	}
 
+	/**
+	 * 是否为空
+	 */
 	@Override
 	public boolean isEmpty() {
-		// TODO Auto-generated method stub
-		return false;
+		return size == 0;
 	}
 
+	/**
+	 * 是否包含某个key
+	 */
 	@Override
 	public boolean containsKey(Object key) {
-		// TODO Auto-generated method stub
-		return false;
+		return getNode(hash(key), key) != null;
 	}
 
+	/**
+	 * 是否包含某个value
+	 */
 	@Override
 	public boolean containsValue(Object value) {
-		// TODO Auto-generated method stub
+		Node<K, V>[] tab;
+		V v;
+		if ((tab = table) != null && size > 0) {
+			for (int i = 0; i < table.length; ++i) {
+				for (Node<K, V> e = tab[i]; e != null; e = e.next) {
+					if ((v = e.value) == value || (value != null && value.equals(v))) {
+						return true;
+					}
+				}
+			}
+		}
 		return false;
 	}
 
+	/**
+	 * 根据key取value
+	 */
 	@Override
 	public V get(Object key) {
-		// TODO Auto-generated method stub
-		return null;
+		Node<K, V> e;
+		return (e = getNode(hash(key), key)) == null ? null : e.value;
 	}
 
+	
+	final Node<K, V> getNode(int hash, Object key) {
+		Node<K,V>[] tab; Node<K,V> first, e; int n; K k;
+        if ((tab = table) != null && (n = tab.length) > 0 &&
+            (first = tab[(n - 1) & hash]) != null) {
+            if (first.hash == hash && 
+                ((k = first.key) == key || (key != null && key.equals(k)))) {
+                //如果第一个就相等
+            	return first;
+            }
+            //如果第一个不相等就要判断是红黑树还是链表
+            if ((e = first.next) != null) {
+                if (first instanceof TreeNode) {
+                	//如果是红黑树
+                    return ((TreeNode<K,V>)first).getTreeNode(hash, key);
+                }
+                //如果是链表，则遍历链表
+                do {
+                    if (e.hash == hash &&
+                        ((k = e.key) == key || (key != null && key.equals(k)))) {
+                        return e;
+                    }
+                } while ((e = e.next) != null);
+            }
+        }
+        return null;
+	}
+	
+	/**
+	 * 插入key-value
+	 */
 	@Override
 	public V put(K key, V value) {
-		// TODO Auto-generated method stub
-		return null;
+		return putVal(hash(key), key, value, false, true);
 	}
 
+	/**
+	 * 根据key删除
+	 */
 	@Override
 	public V remove(Object key) {
-		// TODO Auto-generated method stub
-		return null;
+		Node<K, V> e;
+		return (e = removeNode(hash(key), key, null, false, true)) == null ?
+	            null : e.value;
+	}
+	
+	//删除Node
+	final Node<K, V> removeNode(int hash, Object key, Object value,
+            boolean matchValue, boolean movable) {
+		Node<K, V>[] tab;
+		Node<K, V> p;
+		int n, index;
+		if ((tab = table) != null && (n = tab.length) > 0 &&
+		            (p = tab[index = (n - 1) & hash]) != null) {
+		            Node<K,V> node = null, e; K k; V v;
+		            if (p.hash == hash &&
+		                ((k = p.key) == key || (key != null && key.equals(k)))) {
+		            	//如果第一个就相同
+		                node = p;
+		            } else if ((e = p.next) != null) {
+		            	//判断是否为红黑树，如不是则遍历链表
+		                if (p instanceof TreeNode) {
+		                    node = ((TreeNode<K,V>)p).getTreeNode(hash, key);
+		                } else {
+		                    do {
+		                        if (e.hash == hash &&
+		                            ((k = e.key) == key ||
+		                             (key != null && key.equals(k)))) {
+		                            node = e;
+		                            break;
+		                        }
+		                        p = e;
+		                    } while ((e = e.next) != null);
+		                }
+		            }
+		            //删除操作
+		            if (node != null && (!matchValue || (v = node.value) == value ||
+		                                 (value != null && value.equals(v)))) {
+		                if (node instanceof TreeNode) {
+		                    ((TreeNode<K,V>)node).removeTreeNode(this, tab, movable);
+		                } else if (node == p) {
+		                    tab[index] = node.next;
+		                } else {
+		                    p.next = node.next;
+		                }
+		                ++modCount;
+		                --size;
+		                afterNodeRemoval(node);
+		                return node;
+		            }
+		        }
+		        return null;
 	}
 
+	/**
+	 * 插入一个map
+	 */
 	@Override
 	public void putAll(Map<? extends K, ? extends V> m) {
-		// TODO Auto-generated method stub
-		
+		putMapEntries(m, true);
 	}
+	
+	
 
+	/**
+	 * 清空map
+	 */
 	@Override
 	public void clear() {
-		// TODO Auto-generated method stub
-		
+		Node<K, V>[] tab;
+		if ((tab = table) != null && size > 0) {
+			size = 0;
+			for (int i = 0; i < tab.length; i++) {
+				tab[i] = null;
+			}
+		}
 	}
 
 	@Override
 	public Set<K> keySet() {
-		// TODO Auto-generated method stub
-		return null;
+		Set<K> ks = keySet;
+		if (ks == null) {
+			ks = new KeySet();
+			keySet = ks;
+		}
+		return ks;
+	}
+	
+	final class KeySet extends AbstractSet<K> {
+		
+
+		@Override
+		public final Iterator<K> iterator() {
+			return null;
+		}
+
+		@Override
+		public final int size() {
+			return size;
+		}
+		
+		@Override
+		public final void clear() {
+			HashMap.this.clear();
+		}
+		
+		@Override
+		public final boolean contains(Object o) {
+			return containsKey(o);
+		}
+		
+		@Override
+		public final boolean remove(Object key) {
+			return removeNode(hash(key), key, null, false, true) != null;
+		}
+		
+		@Override
+		public final void forEach(Consumer<? super K> action) {
+			
+		}
+		
 	}
 
 	@Override
@@ -459,12 +624,34 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 		return null;
 	}
 	
+	/**
+	 * @return 是否实现了Comparable接口
+	 */
 	static Class<?> comparableClassFor(Object x) {
-		return null;
+		//如果key实现了Comparable接口
+		if (x instanceof Comparable) {
+            Class<?> c; Type[] ts, as; Type t; ParameterizedType p;
+            if ((c = x.getClass()) == String.class) {
+                return c;
+            }
+            if ((ts = c.getGenericInterfaces()) != null) {
+                for (int i = 0; i < ts.length; ++i) {
+                    if (((t = ts[i]) instanceof ParameterizedType) &&
+                        ((p = (ParameterizedType)t).getRawType() ==
+                         Comparable.class) &&
+                        (as = p.getActualTypeArguments()) != null &&
+                        as.length == 1 && as[0] == c) // type arg is c
+                        return c;
+                }
+            }
+        }
+        return null;
 	}
 	
+	@SuppressWarnings({ "unchecked", "rawtypes" } )
 	static int compareComparables(Class<?> kc, Object k, Object x) {
-		return 0;
+		return (x == null || x.getClass() != kc ? 0 :
+            ((Comparable)k).compareTo(x));
 	}
 	
 	Node<K,V> replacementNode(Node<K,V> p, Node<K,V> next) {
@@ -487,7 +674,7 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 		TreeNode<K, V> parent;
 		TreeNode<K, V> left;
 		TreeNode<K, V> right;
-		TreeNode<K, V> prev;
+		TreeNode<K, V> prev; //需要分开下删除
 		boolean red;
 		
 		TreeNode(int hash, K key, V value, Node<K, V> next) {
@@ -532,6 +719,11 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 			}
 		}
 		
+		/**
+		 * @param h hash
+		 * @param k key
+		 * @return 根据hash和key获取的树节点
+		 */
 		final TreeNode<K, V> find(int h, Object k, Class<?> kc) {
 			TreeNode<K, V> p = this;
 			do {
@@ -562,6 +754,11 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 			return null;
 		}
 		
+		/**
+		 * @param h hash
+		 * @param k key
+		 * @return 根据hash和key获取的树节点
+		 */
 		final TreeNode<K, V> getTreeNode(int h, Object k) {
 			return ((parent != null) ? root() : this).find(h, k, null);
 		}
@@ -584,13 +781,14 @@ public class HashMap<K, V> extends AbstractMap<K, V>
             TreeNode<K,V> root = (parent != null) ? root() : this;
             for (TreeNode<K,V> p = root;;) {
                 int dir, ph; K pk;
-                if ((ph = p.hash) > h)
+                if ((ph = p.hash) > h) {
                     dir = -1;
-                else if (ph < h)
+                } else if (ph < h) {
                     dir = 1;
-                else if ((pk = p.key) == k || (k != null && k.equals(pk)))
-                    return p;
-                else if ((kc == null &&
+                } else if ((pk = p.key) == k || (k != null && k.equals(pk))) {
+                    //存在相同key时
+                	return p;
+                } else if ((kc == null &&
                           (kc = comparableClassFor(k)) == null) ||
                          (dir = compareComparables(kc, k, pk)) == 0) {
                     if (!searched) {
@@ -599,24 +797,29 @@ public class HashMap<K, V> extends AbstractMap<K, V>
                         if (((ch = p.left) != null &&
                              (q = ch.find(h, k, kc)) != null) ||
                             ((ch = p.right) != null &&
-                             (q = ch.find(h, k, kc)) != null))
+                             (q = ch.find(h, k, kc)) != null)) {
                             return q;
+                        }
                     }
                     dir = tieBreakOrder(k, pk);
                 }
-
+                
+                
+                //插入新的树节点
                 TreeNode<K,V> xp = p;
                 if ((p = (dir <= 0) ? p.left : p.right) == null) {
                     Node<K,V> xpn = xp.next;
                     TreeNode<K,V> x = map.newTreeNode(h, k, v, xpn);
-                    if (dir <= 0)
+                    if (dir <= 0) {
                         xp.left = x;
-                    else
+                    } else {
                         xp.right = x;
+                    }
                     xp.next = x;
                     x.parent = x.prev = xp;
-                    if (xpn != null)
+                    if (xpn != null) {
                         ((TreeNode<K,V>)xpn).prev = x;
+                    }
                     moveRootToFront(tab, balanceInsertion(root, x));
                     return null;
                 }
@@ -667,114 +870,147 @@ public class HashMap<K, V> extends AbstractMap<K, V>
                     }
                 }
             }
+            //增加一个节点后， 红黑树的根节点可能改变
             moveRootToFront(tab, root);
 		}
 		
+		//将红黑树转换成链表
 		final Node<K, V> untreeify(HashMap<K, V> map) {
 			Node<K,V> hd = null, tl = null;
             for (Node<K,V> q = this; q != null; q = q.next) {
                 Node<K,V> p = map.replacementNode(q, null);
-                if (tl == null)
+                if (tl == null) {
                     hd = p;
-                else
+                } else {
                     tl.next = p;
+                }
                 tl = p;
             }
             return hd;
 		}
 		
+		/* 
+		 * 1如果删除点p的左右子树都为空，或者只有一棵子树非空。
+		 * 直接将p删除（左右子树都为空时），或者用非空子树替代p（只有一棵子树非空时）
+		 * 
+		 * 2如果删除点p的左右子树都非空。可以用p的后继s代替p，
+		 * 然后使用情况1删除s
+		 * 
+		 * 后继 successor
+		 * t的右子树不空，则t的后继是其右子树中最小的那个元素。
+		 * t的右孩子为空，则t的后继是其第一个向左走的祖先。
+		 */
 		final void removeTreeNode(HashMap<K, V> map, Node<K, V>[] tab, boolean movable) {
 			int n;
-            if (tab == null || (n = tab.length) == 0)
+            if (tab == null || (n = tab.length) == 0) {
                 return;
+            }
             int index = (n - 1) & hash;
             TreeNode<K,V> first = (TreeNode<K,V>)tab[index], root = first, rl;
+            //successor 给定节点t，其后继是大于t的最小的那个元素
             TreeNode<K,V> succ = (TreeNode<K,V>)next, pred = prev;
-            if (pred == null)
+            if (pred == null) {
                 tab[index] = first = succ;
-            else
+            } else {
                 pred.next = succ;
-            if (succ != null)
+            }
+            if (succ != null) {
                 succ.prev = pred;
-            if (first == null)
+            }
+            if (first == null) {
                 return;
-            if (root.parent != null)
+            }
+            if (root.parent != null) {
                 root = root.root();
+            }
             if (root == null || root.right == null ||
                 (rl = root.left) == null || rl.left == null) {
-                tab[index] = first.untreeify(map);  // too small
+            	//too small 转换为链表
+                tab[index] = first.untreeify(map);  
                 return;
             }
             TreeNode<K,V> p = this, pl = left, pr = right, replacement;
+            //t的右子树不空，则t的后继是其右子树中最小的那个元素。
+            //t的右孩子为空，则t的后继是其第一个向左走的祖先。
             if (pl != null && pr != null) {
                 TreeNode<K,V> s = pr, sl;
-                while ((sl = s.left) != null) // find successor
+                while ((sl = s.left) != null) {
                     s = sl;
+                }
                 boolean c = s.red; s.red = p.red; p.red = c; // swap colors
                 TreeNode<K,V> sr = s.right;
                 TreeNode<K,V> pp = p.parent;
-                if (s == pr) { // p was s's direct parent
+                if (s == pr) { 
                     p.parent = s;
                     s.right = p;
-                }
-                else {
+                } else {
                     TreeNode<K,V> sp = s.parent;
                     if ((p.parent = sp) != null) {
-                        if (s == sp.left)
+                        if (s == sp.left) {
                             sp.left = p;
-                        else
+                        } else {
                             sp.right = p;
+                        }
                     }
-                    if ((s.right = pr) != null)
+                    if ((s.right = pr) != null) {
                         pr.parent = s;
+                    }
                 }
                 p.left = null;
-                if ((p.right = sr) != null)
+                if ((p.right = sr) != null) {
                     sr.parent = p;
-                if ((s.left = pl) != null)
+                }
+                if ((s.left = pl) != null) {
                     pl.parent = s;
-                if ((s.parent = pp) == null)
+                }
+                if ((s.parent = pp) == null) {
                     root = s;
-                else if (p == pp.left)
+                } else if (p == pp.left) {
                     pp.left = s;
-                else
+                } else {
                     pp.right = s;
-                if (sr != null)
+                }
+                if (sr != null) {
                     replacement = sr;
-                else
+                } else {
                     replacement = p;
-            }
-            else if (pl != null)
+                }
+            } else if (pl != null) {
                 replacement = pl;
-            else if (pr != null)
+            } else if (pr != null) {
                 replacement = pr;
-            else
+            } else {
                 replacement = p;
+            }
             if (replacement != p) {
                 TreeNode<K,V> pp = replacement.parent = p.parent;
-                if (pp == null)
+                if (pp == null) {
                     root = replacement;
-                else if (p == pp.left)
+                } else if (p == pp.left) {
                     pp.left = replacement;
-                else
+                } else {
                     pp.right = replacement;
+                }
                 p.left = p.right = p.parent = null;
             }
 
             TreeNode<K,V> r = p.red ? root : balanceDeletion(root, replacement);
 
-            if (replacement == p) {  // detach
+            if (replacement == p) {  
                 TreeNode<K,V> pp = p.parent;
                 p.parent = null;
                 if (pp != null) {
-                    if (p == pp.left)
+                    if (p == pp.left) {
                         pp.left = null;
-                    else if (p == pp.right)
+                    } else if (p == pp.right) {
                         pp.right = null;
+                    }
                 }
             }
-            if (movable)
+            if (movable) {
+            	//红黑树删除后的调整可能会改变根节点
                 moveRootToFront(tab, r);
+            }
 		}
 		
 		final void split(HashMap<K, V> map, Node<K, V>[] tab, int index, int bit) {
