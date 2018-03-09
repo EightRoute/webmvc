@@ -202,7 +202,7 @@ public class LinkedList<E> implements List<E>, Deque<E>, Serializable {
 	
 	/**
 	 * 转化为数组
-	 * @param a 传入数组对象,转化的数组将传入该数组
+	 * @param a 传入数组对象,转化的数组将传入该对象
 	 */
 	@SuppressWarnings("unchecked")
 	@Override

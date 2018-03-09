@@ -37,7 +37,7 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 	 */
 	static final int DEFAULT_INITIAL_CAPACITY = 16;
 	/*最大容量, 1 << 30*/
-	static final int MAXIMUM_CAPACITY = 1073741824;
+	public static final int MAXIMUM_CAPACITY = 1073741824;
 	/*默认扩容参数,代表了table的填充度有多少*/
 	static final float DEFAULT_LOAD_FACTOR = 0.75F;
 	
@@ -605,8 +605,8 @@ public class HashMap<K, V> extends AbstractMap<K, V>
         return result;
     }
 
-    final float loadFactor() { return loadFactor; }
-    final int capacity() {
+    public final float loadFactor() { return loadFactor; }
+    public final int capacity() {
         return (table != null) ? table.length :
             (threshold > 0) ? threshold :
             DEFAULT_INITIAL_CAPACITY;
@@ -971,10 +971,10 @@ public class HashMap<K, V> extends AbstractMap<K, V>
         }
     }
 	
-	static final class KeySpliterator<K,V> extends HashMapSpliterator<K,V>
+	public static final class KeySpliterator<K,V> extends HashMapSpliterator<K,V>
     	implements Spliterator<K> {
 		
-		KeySpliterator(HashMap<K,V> m, int origin, int fence, int est,
+		public KeySpliterator(HashMap<K,V> m, int origin, int fence, int est,
                    int expectedModCount) {
 			super(m, origin, fence, est, expectedModCount);
 		}
