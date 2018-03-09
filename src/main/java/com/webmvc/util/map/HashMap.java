@@ -1,21 +1,33 @@
 package com.webmvc.util.map;
 
+import java.io.IOException;
+import java.io.InvalidObjectException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.util.AbstractCollection;
 import java.util.AbstractSet;
 import java.util.Collection;
+import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
+import java.util.Spliterator;
 import java.util.function.Consumer;
 
 
 
-
+/**
+ * java8 HashMap源码
+ * @author aisino-sgz
+ * @date   2018年3月9日 下午1:47:18
+ */
 public class HashMap<K, V> extends AbstractMap<K, V> 
-	implements Map<K, V>, Serializable{
+	implements Map<K, V>, Serializable, Cloneable{
 	
 	private static final long serialVersionUID = 2772224917432192756L;
 
@@ -352,6 +364,16 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 		return null;
 	}
 	
+	void reinitialize() {
+        table = null;
+        entrySet = null;
+        keySet = null;
+        values = null;
+        modCount = 0;
+        threshold = 0;
+        size = 0;
+    }
+	
 	void afterNodeAccess(Node<K, V> p) {}
 	void afterNodeInsertion(boolean evict) {}
 	void afterNodeRemoval(Node<K, V> p) {}
@@ -566,6 +588,97 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 			}
 		}
 	}
+	
+	
+	@SuppressWarnings("unchecked")
+	@Override
+    public Object clone() {
+        HashMap<K,V> result;
+        try {
+            result = (HashMap<K,V>)super.clone();
+        } catch (CloneNotSupportedException e) {
+            //不可能发生
+            throw new InternalError(e);
+        }
+        result.reinitialize();
+        result.putMapEntries(this, false);
+        return result;
+    }
+
+    final float loadFactor() { return loadFactor; }
+    final int capacity() {
+        return (table != null) ? table.length :
+            (threshold > 0) ? threshold :
+            DEFAULT_INITIAL_CAPACITY;
+    }
+	
+	void internalWriteEntries(ObjectOutputStream s) throws IOException {
+        Node<K,V>[] tab;
+        if (size > 0 && (tab = table) != null) {
+            for (int i = 0; i < tab.length; ++i) {
+                for (Node<K,V> e = tab[i]; e != null; e = e.next) {
+                    s.writeObject(e.key);
+                    s.writeObject(e.value);
+                }
+            }
+        }
+    }
+	
+	/**
+	 * 序列化
+	 */
+	private void writeObject(ObjectOutputStream s) throws IOException {
+		int buckets = capacity();
+	    // 写threshold, loadfactor和一些隐藏的东西
+	    s.defaultWriteObject();
+	    s.writeInt(buckets);
+	    s.writeInt(size);
+	    internalWriteEntries(s);
+	}
+
+	/**
+     * 反序列化
+     */
+    private void readObject(ObjectInputStream s)
+        throws IOException, ClassNotFoundException {
+        s.defaultReadObject();
+        reinitialize();
+        if (loadFactor <= 0 || Float.isNaN(loadFactor)) {
+            throw new InvalidObjectException("Illegal load factor: " +
+                                             loadFactor);
+        }
+        s.readInt();                
+        int mappings = s.readInt(); 
+        if (mappings < 0) {
+            throw new InvalidObjectException("Illegal mappings count: " +
+                                             mappings);
+        } else if (mappings > 0) { 
+        	// 如果为0使用默认的
+            // loadFactor在0.25...4.0之间
+            float lf = Math.min(Math.max(0.25f, loadFactor), 4.0f);
+            float fc = (float)mappings / lf + 1.0f;
+            int cap = ((fc < DEFAULT_INITIAL_CAPACITY) ?
+                       DEFAULT_INITIAL_CAPACITY :
+                       (fc >= MAXIMUM_CAPACITY) ?
+                       MAXIMUM_CAPACITY :
+                       tableSizeFor((int)fc));
+            float ft = (float)cap * lf;
+            threshold = ((cap < MAXIMUM_CAPACITY && ft < MAXIMUM_CAPACITY) ?
+                         (int)ft : Integer.MAX_VALUE);
+            @SuppressWarnings({"unchecked"})
+            Node<K,V>[] tab = (Node<K,V>[])new Node[cap];
+            table = tab;
+
+            //读key和value，并加入到HashMap中
+            for (int i = 0; i < mappings; i++) {
+                @SuppressWarnings("unchecked")
+                    K key = (K) s.readObject();
+                @SuppressWarnings("unchecked")
+                    V value = (V) s.readObject();
+                putVal(hash(key), key, value, false, false);
+            }
+        }
+    }    
 
 	@Override
 	public Set<K> keySet() {
@@ -577,12 +690,12 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 		return ks;
 	}
 	
+	//使用EntrySet遍历Map类集合，而不是KeySet，因为KeySet遍历了两遍而EntrySet只遍历了一遍
 	final class KeySet extends AbstractSet<K> {
 		
-
 		@Override
 		public final Iterator<K> iterator() {
-			return null;
+			return new KeyIterator();
 		}
 
 		@Override
@@ -607,23 +720,474 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 		
 		@Override
 		public final void forEach(Consumer<? super K> action) {
+			Node<K, V>[] tab;
+			if (action == null) {
+				throw new NullPointerException();
+			}
+			if (size > 0 && (tab = table) != null) {
+				int mc = modCount;
+				for (int i = 0; i < tab.length; ++i) {
+					for (Node<K, V> e = tab[i]; e != null; e = e.next) {
+						action.accept(e.key);
+					}
+				}
+				 if (modCount != mc) {
+	                    throw new ConcurrentModificationException();
+				 }
+			}
 			
+		}
+		
+		@Override
+		public Spliterator<K> spliterator() {
+			// TODO 
+			return null;
 		}
 		
 	}
 
+	//得到V的集合
 	@Override
 	public Collection<V> values() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public Set<Entry<K, V>> entrySet() {
-		// TODO Auto-generated method stub
-		return null;
+		Collection<V> vs = values;
+		if (vs == null) {
+			vs = new Values();
+			values = vs;
+		}
+		return vs;
 	}
 	
+	final class Values extends AbstractCollection<V> {
+
+		@Override
+		public final Iterator<V> iterator() {
+			return new ValueIterator();
+		}
+
+		@Override
+		public final int size() {
+			return size;
+		}
+		
+		@Override
+		public final void clear() {
+			HashMap.this.clear();
+		}
+		
+		@Override
+		public final boolean contains(Object o) {
+			return containsValue(o);
+		}
+		
+		@Override
+		public final void forEach(Consumer<? super V> action) {
+			Node<K,V>[] tab;
+            if (action == null)
+                throw new NullPointerException();
+            if (size > 0 && (tab = table) != null) {
+                int mc = modCount;
+                for (int i = 0; i < tab.length; ++i) {
+                    for (Node<K,V> e = tab[i]; e != null; e = e.next) {
+                        action.accept(e.value);
+                    }
+                }
+                if (modCount != mc) {
+                    throw new ConcurrentModificationException();
+                }
+            }
+		}
+		
+		@Override
+		public Spliterator<V> spliterator() {
+			//TODO
+			return null;
+		}
+		
+	}
+
+	//使用entrySet遍历Map类集合，而不是keySet，因为keySet遍历了两遍而entrySet只遍历了一遍
+	@Override
+	public Set<Entry<K, V>> entrySet() {
+		 Set<Map.Entry<K,V>> es;
+	     return (es = entrySet) == null ? (entrySet = new EntrySet()) : es;
+	}
+	
+	final class EntrySet extends AbstractSet<Map.Entry<K,V>> {
+        public final int size() { return size; }
+        public final void clear() { HashMap.this.clear(); }
+        public final Iterator<Map.Entry<K,V>> iterator() {
+            return new EntryIterator();
+        }
+        public final boolean contains(Object o) {
+            if (!(o instanceof Map.Entry)) {
+                return false;
+            }
+            Map.Entry<?,?> e = (Map.Entry<?,?>) o;
+            Object key = e.getKey();
+            Node<K,V> candidate = getNode(hash(key), key);
+            return candidate != null && candidate.equals(e);
+        }
+        public final boolean remove(Object o) {
+            if (o instanceof Map.Entry) {
+                Map.Entry<?,?> e = (Map.Entry<?,?>) o;
+                Object key = e.getKey();
+                Object value = e.getValue();
+                return removeNode(hash(key), key, value, true, true) != null;
+            }
+            return false;
+        }
+        public final Spliterator<Map.Entry<K,V>> spliterator() {
+        	//TODO
+            return null;
+        }
+        public final void forEach(Consumer<? super Map.Entry<K,V>> action) {
+            Node<K,V>[] tab;
+            if (action == null) {
+                throw new NullPointerException();
+            }
+            if (size > 0 && (tab = table) != null) {
+                int mc = modCount;
+                for (int i = 0; i < tab.length; ++i) {
+                    for (Node<K,V> e = tab[i]; e != null; e = e.next)
+                        action.accept(e);
+                }
+                if (modCount != mc) {
+                    throw new ConcurrentModificationException();
+                }
+            }
+        }
+    }
+	
+	
+	abstract class HashIterator {
+		Node<K, V> next;
+		Node<K, V> current;
+		int expectedModCount;  // 快速失败
+        int index; 
+        
+        HashIterator() {
+			expectedModCount = modCount;
+			Node<K, V>[] t = table;
+			current = next = null;
+			index = 0;
+			if (t != null && size >0) {
+				do {
+					//去掉为null的
+				} while (index < t.length && (next = t[index++]) == null);
+			}
+		}
+        
+        public final boolean hasNext() {
+        	return next != null;
+        }
+        
+        final Node<K, V> nextNode() {
+        	Node<K, V>[] t;
+        	Node<K, V> e = next;
+        	if (modCount != expectedModCount) {
+        		throw new ConcurrentModificationException();
+        	}
+        	if (e == null) {
+        		throw new NoSuchElementException();
+        	}
+        	if ((next = (current = e).next) == null && (t = table) != null) {
+                do {} while (index < t.length && (next = t[index++]) == null);
+            }
+            return e;
+        }
+        
+        public final void remove() {
+        	Node<K, V> p = current;
+        	if (p == null) {
+        		throw new IllegalStateException();
+        	}
+        	if (modCount != expectedModCount) {
+        		throw new ConcurrentModificationException();
+        	}
+        	current = null;//gc
+        	K key = p.key;
+        	removeNode(hash(key), key, null, false, false);
+        	expectedModCount = modCount;
+        }
+	}
+	
+	final class KeyIterator extends HashIterator implements Iterator<K>{
+		@Override
+		public K next() {
+			return nextNode().key;
+		}		
+	}
+	final class ValueIterator extends HashIterator implements Iterator<V> {
+		@Override
+		public V next() {
+			return nextNode().value;
+		}	
+	}
+	//既可以得到key又可以得到value
+	final class EntryIterator extends HashIterator implements Iterator<Map.Entry<K,V>> {
+		@Override
+		public java.util.Map.Entry<K, V> next() {
+			return nextNode();
+		}	
+	}
+	
+	/*
+	 * 并行遍历
+	 * 把多个任务分配到不同核上并行执行，能最大发挥多核的能力
+	 */
+	static class HashMapSpliterator<K,V> {
+        final HashMap<K,V> map;
+        Node<K,V> current;          // current node
+        int index;                  // current index, modified on advance/split
+        int fence;                  // one past last index
+        int est;                    // size estimate
+        int expectedModCount;       // for comodification checks
+
+        HashMapSpliterator(HashMap<K,V> m, int origin,
+                           int fence, int est,
+                           int expectedModCount) {
+            this.map = m;
+            this.index = origin;
+            this.fence = fence;
+            this.est = est;
+            this.expectedModCount = expectedModCount;
+        }
+
+        final int getFence() { // initialize fence and size on first use
+            int hi;
+            if ((hi = fence) < 0) {
+                HashMap<K,V> m = map;
+                est = m.size;
+                expectedModCount = m.modCount;
+                Node<K,V>[] tab = m.table;
+                hi = fence = (tab == null) ? 0 : tab.length;
+            }
+            return hi;
+        }
+        //用于估算还剩下多少个元素需要遍历
+        public final long estimateSize() {
+            getFence(); 
+            return (long) est;
+        }
+    }
+	
+	static final class KeySpliterator<K,V> extends HashMapSpliterator<K,V>
+    	implements Spliterator<K> {
+		
+		KeySpliterator(HashMap<K,V> m, int origin, int fence, int est,
+                   int expectedModCount) {
+			super(m, origin, fence, est, expectedModCount);
+		}
+		//把当前元素划分一部分出去创建一个新的Spliterator作为返回，两个Spliterator变会并行执行，如果元素个数小到无法划分则返回null
+		public KeySpliterator<K,V> trySplit() {
+			int hi = getFence(), lo = index, mid = (lo + hi) >>> 1;
+                return (lo >= mid || current != null) ? null :
+                	new KeySpliterator<>(map, lo, index = mid, est >>>= 1,
+                                    expectedModCount);
+		}
+
+		public void forEachRemaining(Consumer<? super K> action) {
+			int i, hi, mc;
+			if (action == null)
+				throw new NullPointerException();
+			HashMap<K,V> m = map;
+			Node<K,V>[] tab = m.table;
+			if ((hi = fence) < 0) {
+				mc = expectedModCount = m.modCount;
+				hi = fence = (tab == null) ? 0 : tab.length;
+			}
+			else
+				mc = expectedModCount;
+			if (tab != null && tab.length >= hi &&
+					(i = index) >= 0 && (i < (index = hi) || current != null)) {
+				Node<K,V> p = current;
+				current = null;
+				do {
+					if (p == null)
+						p = tab[i++];
+					else {
+						action.accept(p.key);
+						p = p.next;
+					}
+				} while (p != null || i < hi);
+				if (m.modCount != mc)
+					throw new ConcurrentModificationException();
+			}
+		}
+		
+		//
+		public boolean tryAdvance(Consumer<? super K> action) {
+			int hi;
+			if (action == null)
+				throw new NullPointerException();
+			Node<K,V>[] tab = map.table;
+			if (tab != null && tab.length >= (hi = getFence()) && index >= 0) {
+				while (current != null || index < hi) {
+					if (current == null)
+						current = tab[index++];
+					else {
+						K k = current.key;
+						current = current.next;
+						action.accept(k);
+						if (map.modCount != expectedModCount)
+							throw new ConcurrentModificationException();
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+		//表示该Spliterator有哪些特性，用于可以更好控制和优化Spliterator的使用
+		public int characteristics() {
+			return (fence < 0 || est == map.size ? Spliterator.SIZED : 0) |
+					Spliterator.DISTINCT;
+		}
+	}
+    
+    static final class ValueSpliterator<K,V> extends HashMapSpliterator<K,V>
+    	implements Spliterator<V> {
+    	
+    	ValueSpliterator(HashMap<K,V> m, int origin, int fence, int est,
+                     int expectedModCount) {
+    		super(m, origin, fence, est, expectedModCount);
+    	}
+    	//把当前元素划分一部分出去创建一个新的Spliterator作为返回，两个Spliterator变会并行执行，如果元素个数小到无法划分则返回null
+    	public ValueSpliterator<K,V> trySplit() {
+    		int hi = getFence(), lo = index, mid = (lo + hi) >>> 1;
+				return (lo >= mid || current != null) ? null :
+					new ValueSpliterator<>(map, lo, index = mid, est >>>= 1,
+                                      expectedModCount);
+    	}
+
+    	public void forEachRemaining(Consumer<? super V> action) {
+    		int i, hi, mc;
+    		if (action == null)
+    			throw new NullPointerException();
+    		HashMap<K,V> m = map;
+    		Node<K,V>[] tab = m.table;
+    		if ((hi = fence) < 0) {
+    			mc = expectedModCount = m.modCount;
+    			hi = fence = (tab == null) ? 0 : tab.length;
+    		}
+    		else
+    			mc = expectedModCount;
+    		if (tab != null && tab.length >= hi &&
+    				(i = index) >= 0 && (i < (index = hi) || current != null)) {
+    			Node<K,V> p = current;
+    			current = null;
+    			do {
+    				if (p == null)
+    					p = tab[i++];
+    				else {
+    					action.accept(p.value);
+    					p = p.next;
+    				}
+    			} while (p != null || i < hi);
+    			if (m.modCount != mc)
+    				throw new ConcurrentModificationException();
+    		}
+    	}
+    	//顺序处理每个元素
+    	public boolean tryAdvance(Consumer<? super V> action) {
+    		int hi;
+    		if (action == null)
+    			throw new NullPointerException();
+    		Node<K,V>[] tab = map.table;
+    		if (tab != null && tab.length >= (hi = getFence()) && index >= 0) {
+    			while (current != null || index < hi) {
+    				if (current == null)
+    					current = tab[index++];
+    				else {
+    					V v = current.value;
+    					current = current.next;
+    					action.accept(v);
+    					if (map.modCount != expectedModCount)
+    						throw new ConcurrentModificationException();
+    					return true;
+    				}
+    			}
+    		}
+    		return false;
+    	}
+    	//表示该Spliterator有哪些特性，用于可以更好控制和优化Spliterator的使用
+    	public int characteristics() {
+    		return (fence < 0 || est == map.size ? Spliterator.SIZED : 0);
+    	}
+    }
+
+    static final class EntrySpliterator<K,V> extends HashMapSpliterator<K,V>
+    	implements Spliterator<Map.Entry<K,V>> {
+    	EntrySpliterator(HashMap<K,V> m, int origin, int fence, int est,
+                     	int expectedModCount) {
+    		super(m, origin, fence, est, expectedModCount);
+    	}
+    	//把当前元素划分一部分出去创建一个新的Spliterator作为返回，两个Spliterator变会并行执行，如果元素个数小到无法划分则返回null
+    	public EntrySpliterator<K,V> trySplit() {
+    		int hi = getFence(), lo = index, mid = (lo + hi) >>> 1;
+    			return (lo >= mid || current != null) ? null :
+    				new EntrySpliterator<>(map, lo, index = mid, est >>>= 1,
+                                      expectedModCount);
+    	}
+
+    	public void forEachRemaining(Consumer<? super Map.Entry<K,V>> action) {
+    		int i, hi, mc;
+    		if (action == null)
+    			throw new NullPointerException();
+    		HashMap<K,V> m = map;
+    		Node<K,V>[] tab = m.table;
+    		if ((hi = fence) < 0) {
+    			mc = expectedModCount = m.modCount;
+    			hi = fence = (tab == null) ? 0 : tab.length;
+    		}
+    		else
+    			mc = expectedModCount;
+    		if (tab != null && tab.length >= hi &&
+    				(i = index) >= 0 && (i < (index = hi) || current != null)) {
+    			Node<K,V> p = current;
+    			current = null;
+    			do {
+    				if (p == null)
+    					p = tab[i++];
+    				else {
+    					action.accept(p);
+    					p = p.next;
+    				}
+    			} while (p != null || i < hi);
+    			if (m.modCount != mc)
+    				throw new ConcurrentModificationException();
+    		}
+    	}
+    	//顺序处理每个元素
+    	public boolean tryAdvance(Consumer<? super Map.Entry<K,V>> action) {
+    		int hi;
+    		if (action == null)
+    			throw new NullPointerException();
+    		Node<K,V>[] tab = map.table;
+    		if (tab != null && tab.length >= (hi = getFence()) && index >= 0) {
+    			while (current != null || index < hi) {
+    				if (current == null)
+    					current = tab[index++];
+    				else {
+    					Node<K,V> e = current;
+    					current = current.next;
+    					action.accept(e);
+    					if (map.modCount != expectedModCount)
+    						throw new ConcurrentModificationException();
+    					return true;
+    				}
+    			}
+    		}
+    		return false;
+    	}
+    	//表示该Spliterator有哪些特性，用于可以更好控制和优化Spliterator的使用
+    	public int characteristics() {
+    		return (fence < 0 || est == map.size ? Spliterator.SIZED : 0) |
+    				Spliterator.DISTINCT;
+    	}
+    
+    }
+
+    
 	/**
 	 * @return 是否实现了Comparable接口
 	 */
@@ -640,8 +1204,9 @@ public class HashMap<K, V> extends AbstractMap<K, V>
                         ((p = (ParameterizedType)t).getRawType() ==
                          Comparable.class) &&
                         (as = p.getActualTypeArguments()) != null &&
-                        as.length == 1 && as[0] == c) // type arg is c
+                        as.length == 1 && as[0] == c) {
                         return c;
+                    }
                 }
             }
         }
@@ -654,6 +1219,9 @@ public class HashMap<K, V> extends AbstractMap<K, V>
             ((Comparable)k).compareTo(x));
 	}
 	
+	/**
+	 * 转换成链表节点
+	 */
 	Node<K,V> replacementNode(Node<K,V> p, Node<K,V> next) {
         return new Node<>(p.hash, p.key, p.value, next);
     }
@@ -1012,105 +1580,122 @@ public class HashMap<K, V> extends AbstractMap<K, V>
                 moveRootToFront(tab, r);
             }
 		}
-		
+		//扩容时需要将拆开红黑树分别放进新的桶中
 		final void split(HashMap<K, V> map, Node<K, V>[] tab, int index, int bit) {
 			TreeNode<K,V> b = this;
-            // Relink into lo and hi lists, preserving order
             TreeNode<K,V> loHead = null, loTail = null;
             TreeNode<K,V> hiHead = null, hiTail = null;
             int lc = 0, hc = 0;
+            //遍历树
             for (TreeNode<K,V> e = b, next; e != null; e = next) {
                 next = (TreeNode<K,V>)e.next;
                 e.next = null;
+                //e.hash & bit则位置不需要移动
                 if ((e.hash & bit) == 0) {
-                    if ((e.prev = loTail) == null)
+                    if ((e.prev = loTail) == null) {
                         loHead = e;
-                    else
+                    } else {
                         loTail.next = e;
+                    }
                     loTail = e;
                     ++lc;
                 }
                 else {
-                    if ((e.prev = hiTail) == null)
+                    if ((e.prev = hiTail) == null) {
                         hiHead = e;
-                    else
+                    } else {
                         hiTail.next = e;
+                    }
                     hiTail = e;
                     ++hc;
                 }
             }
 
             if (loHead != null) {
-                if (lc <= UNTREEIFY_THRESHOLD)
+                if (lc <= UNTREEIFY_THRESHOLD) {
+                	//节点太少时转换成链表结构
                     tab[index] = loHead.untreeify(map);
-                else {
+                } else {
                     tab[index] = loHead;
-                    if (hiHead != null) // (else is already treeified)
+                    if (hiHead != null) {
+                    	//将红黑树节点链表转换成红黑树
                         loHead.treeify(tab);
+                    }
                 }
             }
+            //需要移动到index + bit
             if (hiHead != null) {
-                if (hc <= UNTREEIFY_THRESHOLD)
+                if (hc <= UNTREEIFY_THRESHOLD) {
+                	//节点太少时转换成链表结构
                     tab[index + bit] = hiHead.untreeify(map);
-                else {
+                } else {
                     tab[index + bit] = hiHead;
-                    if (loHead != null)
+                    if (loHead != null) {
+                    	//将红黑树节点链表转换成红黑树
                         hiHead.treeify(tab);
+                    }
                 }
             }
 		}
 		
+		//左旋
 		static <K, V> TreeNode<K, V> rotateLeft(TreeNode<K, V> root, TreeNode<K, V> p) {
 			TreeNode<K,V> r, pp, rl;
             if (p != null && (r = p.right) != null) {
-                if ((rl = p.right = r.left) != null)
+                if ((rl = p.right = r.left) != null) {
                     rl.parent = p;
-                if ((pp = r.parent = p.parent) == null)
+                }
+                if ((pp = r.parent = p.parent) == null) {
                     (root = r).red = false;
-                else if (pp.left == p)
+                } else if (pp.left == p) {
                     pp.left = r;
-                else
+                } else {
                     pp.right = r;
+                }
                 r.left = p;
                 p.parent = r;
             }
             return root;
 		}
 		
+		//右旋
 		static <K, V> TreeNode<K, V> rotateRight(TreeNode<K, V> root, TreeNode<K, V> p) {
 			TreeNode<K,V> l, pp, lr;
             if (p != null && (l = p.left) != null) {
-                if ((lr = p.left = l.right) != null)
+                if ((lr = p.left = l.right) != null) {
                     lr.parent = p;
-                if ((pp = l.parent = p.parent) == null)
+                }
+                if ((pp = l.parent = p.parent) == null) {
                     (root = l).red = false;
-                else if (pp.right == p)
+                } else if (pp.right == p) {
                     pp.right = l;
-                else
+                } else {
                     pp.left = l;
+                }
                 l.right = p;
                 p.parent = l;
             }
             return root;
 		}
 		
+		//插入新节点后恢复红黑树特性
+		//几种情况的操作是对称的
 		static <K, V> TreeNode<K, V> balanceInsertion(TreeNode<K, V> root, TreeNode<K, V> x) {
 			 x.red = true;
 	            for (TreeNode<K,V> xp, xpp, xppl, xppr;;) {
 	                if ((xp = x.parent) == null) {
 	                    x.red = false;
 	                    return x;
-	                }
-	                else if (!xp.red || (xpp = xp.parent) == null)
+	                } else if (!xp.red || (xpp = xp.parent) == null) {
 	                    return root;
+	                }
 	                if (xp == (xppl = xpp.left)) {
 	                    if ((xppr = xpp.right) != null && xppr.red) {
 	                        xppr.red = false;
 	                        xp.red = false;
 	                        xpp.red = true;
 	                        x = xpp;
-	                    }
-	                    else {
+	                    } else {
 	                        if (x == xp.right) {
 	                            root = rotateLeft(root, x = xp);
 	                            xpp = (xp = x.parent) == null ? null : xp.parent;
@@ -1123,15 +1708,13 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 	                            }
 	                        }
 	                    }
-	                }
-	                else {
+	                } else {
 	                    if (xppl != null && xppl.red) {
 	                        xppl.red = false;
 	                        xp.red = false;
 	                        xpp.red = true;
 	                        x = xpp;
-	                    }
-	                    else {
+	                    } else {
 	                        if (x == xp.left) {
 	                            root = rotateRight(root, x = xp);
 	                            xpp = (xp = x.parent) == null ? null : xp.parent;
@@ -1148,35 +1731,34 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 	            }
 		}
 		
+		//删除节点后恢复红黑树特性
+		//几种情况的操作是对称的
 		static <K, V> TreeNode<K, V> balanceDeletion(TreeNode<K, V> root, TreeNode<K, V> x) {
 			for (TreeNode<K,V> xp, xpl, xpr;;)  {
-                if (x == null || x == root)
+                if (x == null || x == root) {
                     return root;
-                else if ((xp = x.parent) == null) {
+                } else if ((xp = x.parent) == null) {
                     x.red = false;
                     return x;
-                }
-                else if (x.red) {
+                } else if (x.red) {
                     x.red = false;
                     return root;
-                }
-                else if ((xpl = xp.left) == x) {
+                } else if ((xpl = xp.left) == x) {
                     if ((xpr = xp.right) != null && xpr.red) {
                         xpr.red = false;
                         xp.red = true;
                         root = rotateLeft(root, xp);
                         xpr = (xp = x.parent) == null ? null : xp.right;
                     }
-                    if (xpr == null)
+                    if (xpr == null) {
                         x = xp;
-                    else {
+                    } else {
                         TreeNode<K,V> sl = xpr.left, sr = xpr.right;
                         if ((sr == null || !sr.red) &&
                             (sl == null || !sl.red)) {
                             xpr.red = true;
                             x = xp;
-                        }
-                        else {
+                        } else {
                             if (sr == null || !sr.red) {
                                 if (sl != null)
                                     sl.red = false;
@@ -1197,27 +1779,26 @@ public class HashMap<K, V> extends AbstractMap<K, V>
                             x = root;
                         }
                     }
-                }
-                else { // symmetric
+                } else { 
                     if (xpl != null && xpl.red) {
                         xpl.red = false;
                         xp.red = true;
                         root = rotateRight(root, xp);
                         xpl = (xp = x.parent) == null ? null : xp.left;
                     }
-                    if (xpl == null)
+                    if (xpl == null) {
                         x = xp;
-                    else {
+                    } else {
                         TreeNode<K,V> sl = xpl.left, sr = xpl.right;
                         if ((sl == null || !sl.red) &&
                             (sr == null || !sr.red)) {
                             xpl.red = true;
                             x = xp;
-                        }
-                        else {
+                        } else {
                             if (sl == null || !sl.red) {
-                                if (sr != null)
+                                if (sr != null) {
                                     sr.red = false;
+                                }
                                 xpl.red = true;
                                 root = rotateLeft(root, xpl);
                                 xpl = (xp = x.parent) == null ?
@@ -1225,8 +1806,9 @@ public class HashMap<K, V> extends AbstractMap<K, V>
                             }
                             if (xpl != null) {
                                 xpl.red = (xp == null) ? false : xp.red;
-                                if ((sl = xpl.left) != null)
+                                if ((sl = xpl.left) != null) {
                                     sl.red = false;
+                                }
                             }
                             if (xp != null) {
                                 xp.red = false;
@@ -1239,32 +1821,36 @@ public class HashMap<K, V> extends AbstractMap<K, V>
             }
 		}
 		
+		//检查是否符合红黑树的特性
 		static <K, V> boolean checkInvariants(TreeNode<K, V> t) {
 			TreeNode<K,V> tp = t.parent, tl = t.left, tr = t.right,
 	                tb = t.prev, tn = (TreeNode<K,V>)t.next;
-	            if (tb != null && tb.next != t)
+	            if (tb != null && tb.next != t) {
 	                return false;
-	            if (tn != null && tn.prev != t)
+	            }
+	            if (tn != null && tn.prev != t) {
 	                return false;
-	            if (tp != null && t != tp.left && t != tp.right)
+	            }
+	            if (tp != null && t != tp.left && t != tp.right) {
 	                return false;
-	            if (tl != null && (tl.parent != t || tl.hash > t.hash))
+	            }
+	            if (tl != null && (tl.parent != t || tl.hash > t.hash)) {
 	                return false;
-	            if (tr != null && (tr.parent != t || tr.hash < t.hash))
+	            }
+	            if (tr != null && (tr.parent != t || tr.hash < t.hash)) {
 	                return false;
-	            if (t.red && tl != null && tl.red && tr != null && tr.red)
+	            }
+	            if (t.red && tl != null && tl.red && tr != null && tr.red) {
 	                return false;
-	            if (tl != null && !checkInvariants(tl))
+	            }
+	            if (tl != null && !checkInvariants(tl)) {
 	                return false;
-	            if (tr != null && !checkInvariants(tr))
+	            }
+	            if (tr != null && !checkInvariants(tr)) {
 	                return false;
+	            }
 	            return true;
 	        }
 		}
 				
-	
-	
-
-	
-
 }
