@@ -120,7 +120,8 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 		//(h >>> 16)扰动函数 混合原始哈希码的高位和低位，以此来加大低位的随机性
 		return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
 	}
-	
+
+	/*将桶的容量变为二次幂，无论cap是否为二次幂*/
 	static final int tableSizeFor (int cap) {
 		int n = cap - 1;
 		n |= n >>> 1;
@@ -213,7 +214,7 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 			if (oldCap >= MAXIMUM_CAPACITY) {
 				threshold = Integer.MAX_VALUE;
 				return oldTab;
-			} else if ((newCap = oldCap >> 1) < MAXIMUM_CAPACITY &&
+			} else if ((newCap = oldCap << 1) < MAXIMUM_CAPACITY &&
 					oldCap >= DEFAULT_INITIAL_CAPACITY) {
 				//容量翻倍 ↑, 阈值翻倍↓
 				newThr = oldThr << 1;
@@ -293,7 +294,7 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 			}
 		}
 		
-		return null;
+		return newTab;
 	}
 	
 	/**
