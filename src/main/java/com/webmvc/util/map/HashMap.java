@@ -220,6 +220,7 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 				newThr = oldThr << 1;
 			}
 		} else if (oldThr > 0) {
+			//当设置了初始容量的时候,oldCap为0而oldThr将大于0且为2次幂
 			newCap = oldThr;
 		} else {
 			//初始分配
