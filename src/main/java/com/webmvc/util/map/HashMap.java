@@ -23,8 +23,7 @@ import java.util.function.Consumer;
 
 /**
  * java8 HashMap源码
- * @author aisino-sgz
- * @date   2018年3月9日 下午1:47:18
+ * @author sgz
  */
 public class HashMap<K, V> extends AbstractMap<K, V> 
 	implements Map<K, V>, Serializable, Cloneable{

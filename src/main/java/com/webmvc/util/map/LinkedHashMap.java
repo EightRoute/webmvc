@@ -18,7 +18,7 @@ import java.util.function.Consumer;
 
 /**
  * java8的LinkedHashMap源码
- * @author aisino-sgz
+ * @author sgz
  * @date   2018年3月9日 下午1:45:37
  *  linkedHashMap的基本操作还是和HashMap一样，在其上面加了两个属性，也就是为了记录前一个插入的元素和记录后一个插入的元素
  */
