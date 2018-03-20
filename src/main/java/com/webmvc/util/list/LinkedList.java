@@ -13,7 +13,6 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 /**
  * @author sgz
- * @date   2018年2月12日 下午1:13:40
  */
 public class LinkedList<E> implements List<E>, Deque<E>, Serializable {
 

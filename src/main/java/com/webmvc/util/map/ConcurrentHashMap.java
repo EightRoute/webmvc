@@ -12,11 +12,9 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.Spliterator;
-
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountedCompleter;
 import java.util.concurrent.ForkJoinPool;
-
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
@@ -34,6 +32,9 @@ import java.util.function.ToIntFunction;
 import java.util.function.ToLongBiFunction;
 import java.util.function.ToLongFunction;
 
+/**
+ *  1.8的ConcurrentHashMap不再使用Segment啦
+ */
 public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> ,Serializable{
 
 	private static final long serialVersionUID = -7817995361555362741L;
@@ -80,38 +81,32 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     static final int MIN_TREEIFY_CAPACITY = 64;
 
     /**
-     * Minimum number of rebinnings per transfer step. Ranges are
-     * subdivided to allow multiple resizer threads.  This value
-     * serves as a lower bound to avoid resizers encountering
-     * excessive memory contention.  The value should be at least
-     * DEFAULT_CAPACITY.
+     * 小于DEFAULT_CAPACITY 16将不会开启多线程移动
      */
     private static final int MIN_TRANSFER_STRIDE = 16;
 
     /**
-     * The number of bits used for generation stamp in sizeCtl.
-     * Must be at least 6 for 32bit arrays.
+     * 生成sizeCtl所使用的bit位数
      */
     private static int RESIZE_STAMP_BITS = 16;
 
     /**
-     * The maximum number of threads that can help resize.
-     * Must fit in 32 - RESIZE_STAMP_BITS bits.
+     * 2^15-1，help resize的最大线程数
      */
     private static final int MAX_RESIZERS = (1 << (32 - RESIZE_STAMP_BITS)) - 1;
 
     /**
-     * The bit shift for recording size stamp in sizeCtl.
+     * 32-16=16，sizeCtl中记录size大小的偏移量.
      */
     private static final int RESIZE_STAMP_SHIFT = 32 - RESIZE_STAMP_BITS;
 
     /*
      * Encodings for Node hash fields. See above for explanation.
      */
-    static final int MOVED     = -1; // hash for forwarding nodes
+    static final int MOVED     = -1; // forwarding nodes的hash值
     static final int TREEBIN   = -2; // hash for roots of trees
-    static final int RESERVED  = -3; // hash for transient reservations
-    static final int HASH_BITS = 0x7fffffff; // usable bits of normal node hash
+    static final int RESERVED  = -3; // hash for transient 保留 
+    static final int HASH_BITS = 0x7fffffff; // 0x7fffffff = Integer.MAX_VALUE
 
     /** 有几个cpu执行,Number of CPUS */
     static final int NCPU = Runtime.getRuntime().availableProcessors();
@@ -128,12 +123,8 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     /* ---------------- Nodes -------------- */
 
     /**
-     * Key-value entry.  This class is never exported out as a
-     * user-mutable Map.Entry (i.e., one supporting setValue; see
-     * MapEntry below), but can be used for read-only traversals used
-     * in bulk tasks.  Subclasses of Node with a negative hash field
-     * are special, and contain null keys and values (but are never
-     * exported).  Otherwise, keys and vals are never null.
+     * Key-value entry.
+     * keyvalue都不能为空
      */
     static class Node<K,V> implements Map.Entry<K,V> {
         final int hash;
@@ -185,28 +176,15 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     /* ---------------- Static utilities -------------- */
 
     /**
-     * Spreads (XORs) higher bits of hash to lower and also forces top
-     * bit to 0. Because the table uses power-of-two masking, sets of
-     * hashes that vary only in bits above the current mask will
-     * always collide. (Among known examples are sets of Float keys
-     * holding consecutive whole numbers in small tables.)  So we
-     * apply a transform that spreads the impact of higher bits
-     * downward. There is a tradeoff between speed, utility, and
-     * quality of bit-spreading. Because many common sets of hashes
-     * are already reasonably distributed (so don't benefit from
-     * spreading), and because we use trees to handle large sets of
-     * collisions in bins, we just XOR some shifted bits in the
-     * cheapest possible way to reduce systematic lossage, as well as
-     * to incorporate impact of the highest bits that would otherwise
-     * never be used in index calculations because of table bounds.
+     * 扰动函数，为了分布更均匀 因为散列值分布再松散，要是只取最后几位的话，碰撞也会很严重
+     * HASH_BITS为Integer.MAX_VALUE
      */
     static final int spread(int h) {
         return (h ^ (h >>> 16)) & HASH_BITS;
     }
 
     /**
-     * Returns a power of two table size for the given desired capacity.
-     * See Hackers Delight, sec 3.2
+     * 和HashMap一样 将返回二次幂
      */
     private static final int tableSizeFor(int c) {
         int n = c - 1;
@@ -273,7 +251,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     static final <K,V> Node<K,V> tabAt(Node<K,V>[] tab, int i) {
         return (Node<K,V>)U.getObjectVolatile(tab, ((long)i << ASHIFT) + ABASE);
     }
-
+    //比较table数组下标为i的结点是否为c，若为c，则用v交换操作。否则，不进行交换操作
     static final <K,V> boolean casTabAt(Node<K,V>[] tab, int i,
                                         Node<K,V> c, Node<K,V> v) {
         return U.compareAndSwapObject(tab, ((long)i << ASHIFT) + ABASE, c, v);
@@ -286,8 +264,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     /* ---------------- Fields -------------- */
 
     /**
-     * The array of bins. Lazily initialized upon first insertion.
-     * Size is always a power of two. Accessed directly by iterators.
+     * 直到首次插入时才加载，size必须为2次幂
      */
     transient volatile Node<K,V>[] table;
 
@@ -339,19 +316,13 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
 
     /**
      * Creates a new, empty map with the default initial table size (16).
+     * 创建一个新的空的map 
      */
     public ConcurrentHashMap() {
     }
 
     /**
-     * Creates a new, empty map with an initial table size
-     * accommodating the specified number of elements without the need
-     * to dynamically resize.
-     *
-     * @param initialCapacity The implementation performs internal
-     * sizing to accommodate this many elements.
-     * @throws IllegalArgumentException if the initial capacity of
-     * elements is negative
+     * @param initialCapacity 初始化容量
      */
     public ConcurrentHashMap(int initialCapacity) {
         if (initialCapacity < 0)
@@ -363,9 +334,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     }
 
     /**
-     * Creates a new map with the same mappings as the given map.
-     *
-     * @param m the map
+     * 根据Map生成一个ConcurrentHashMap
      */
     public ConcurrentHashMap(Map<? extends K, ? extends V> m) {
         this.sizeCtl = DEFAULT_CAPACITY;
@@ -373,41 +342,17 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     }
 
     /**
-     * Creates a new, empty map with an initial table size based on
-     * the given number of elements ({@code initialCapacity}) and
-     * initial table density ({@code loadFactor}).
-     *
-     * @param initialCapacity the initial capacity. The implementation
-     * performs internal sizing to accommodate this many elements,
-     * given the specified load factor.
-     * @param loadFactor the load factor (table density) for
-     * establishing the initial table size
-     * @throws IllegalArgumentException if the initial capacity of
-     * elements is negative or the load factor is nonpositive
-     *
-     * @since 1.6
+     * @param initialCapacity 初始化容量
+     * @param loadFactor 负载因子
      */
     public ConcurrentHashMap(int initialCapacity, float loadFactor) {
         this(initialCapacity, loadFactor, 1);
     }
 
     /**
-     * Creates a new, empty map with an initial table size based on
-     * the given number of elements ({@code initialCapacity}), table
-     * density ({@code loadFactor}), and number of concurrently
-     * updating threads ({@code concurrencyLevel}).
-     *
-     * @param initialCapacity the initial capacity. The implementation
-     * performs internal sizing to accommodate this many elements,
-     * given the specified load factor.
-     * @param loadFactor the load factor (table density) for
-     * establishing the initial table size
-     * @param concurrencyLevel the estimated number of concurrently
-     * updating threads. The implementation may use this value as
-     * a sizing hint.
-     * @throws IllegalArgumentException if the initial capacity is
-     * negative or the load factor or concurrencyLevel are
-     * nonpositive
+     * @param initialCapacity 初始化容量
+     * @param loadFactor 负载因子
+     * @param concurrencyLevel 估计数量的并发更新线程
      */
     public ConcurrentHashMap(int initialCapacity,
                              float loadFactor, int concurrencyLevel) {
@@ -424,7 +369,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     // Original (since JDK1.2) Map methods
 
     /**
-     * {@inheritDoc}
+     * 一共有多少元素
      */
     public int size() {
         long n = sumCount();
@@ -434,22 +379,15 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     }
 
     /**
-     * {@inheritDoc}
+     * 是否为空
      */
     public boolean isEmpty() {
         return sumCount() <= 0L; // ignore transient negative values
     }
 
     /**
-     * Returns the value to which the specified key is mapped,
-     * or {@code null} if this map contains no mapping for the key.
-     *
-     * <p>More formally, if this map contains a mapping from a key
-     * {@code k} to a value {@code v} such that {@code key.equals(k)},
-     * then this method returns {@code v}; otherwise it returns
-     * {@code null}.  (There can be at most one such mapping.)
-     *
-     * @throws NullPointerException if the specified key is null
+     * 根据key获取value
+     * 没有加锁
      */
     public V get(Object key) {
         Node<K,V>[] tab; Node<K,V> e, p; int n, eh; K ek;
@@ -457,42 +395,34 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
         if ((tab = table) != null && (n = tab.length) > 0 &&
             (e = tabAt(tab, (n - 1) & h)) != null) {
             if ((eh = e.hash) == h) {
-                if ((ek = e.key) == key || (ek != null && key.equals(ek)))
+            	//如果为首节点则不判断是否为红黑树还是链表
+                if ((ek = e.key) == key || (ek != null && key.equals(ek))) {
                     return e.val;
-            }
-            else if (eh < 0)
+                }
+            } else if (eh < 0) {
+            	// eh < 0红黑树
                 return (p = e.find(h, key)) != null ? p.val : null;
+            }
             while ((e = e.next) != null) {
+            	//遍历链表
                 if (e.hash == h &&
-                    ((ek = e.key) == key || (ek != null && key.equals(ek))))
+                    ((ek = e.key) == key || (ek != null && key.equals(ek)))) {
                     return e.val;
+                }
             }
         }
         return null;
     }
 
     /**
-     * Tests if the specified object is a key in this table.
-     *
-     * @param  key possible key
-     * @return {@code true} if and only if the specified object
-     *         is a key in this table, as determined by the
-     *         {@code equals} method; {@code false} otherwise
-     * @throws NullPointerException if the specified key is null
+     * 是否包含某个key
      */
     public boolean containsKey(Object key) {
         return get(key) != null;
     }
 
     /**
-     * Returns {@code true} if this map maps one or more keys to the
-     * specified value. Note: This method may require a full traversal
-     * of the map, and is much slower than method {@code containsKey}.
-     *
-     * @param value value whose presence in this map is to be tested
-     * @return {@code true} if this map maps one or more keys to the
-     *         specified value
-     * @throws NullPointerException if the specified value is null
+     * 是否包含某个value
      */
     public boolean containsValue(Object value) {
         if (value == null)
@@ -510,43 +440,42 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     }
 
     /**
-     * Maps the specified key to the specified value in this table.
-     * Neither the key nor the value can be null.
-     *
-     * <p>The value can be retrieved by calling the {@code get} method
-     * with a key that is equal to the original key.
-     *
-     * @param key key with which the specified value is to be associated
-     * @param value value to be associated with the specified key
-     * @return the previous value associated with {@code key}, or
-     *         {@code null} if there was no mapping for {@code key}
-     * @throws NullPointerException if the specified key or value is null
+     * 添加值
      */
     public V put(K key, V value) {
         return putVal(key, value, false);
     }
 
-    /** Implementation for put and putIfAbsent */
+    /** onlyIfAbsent为true则value不替换原value 
+     * 只用synchronized锁住头节点*/
     final V putVal(K key, V value, boolean onlyIfAbsent) {
+    	//key和value都不能为null
         if (key == null || value == null) throw new NullPointerException();
         int hash = spread(key.hashCode());
         int binCount = 0;
         for (Node<K,V>[] tab = table;;) {
             Node<K,V> f; int n, i, fh;
-            if (tab == null || (n = tab.length) == 0)
+            if (tab == null || (n = tab.length) == 0) {
+            	//初始化table
+            	//没有跳出循环
                 tab = initTable();
-            else if ((f = tabAt(tab, i = (n - 1) & hash)) == null) {
-                if (casTabAt(tab, i, null,
-                             new Node<K,V>(hash, key, value, null)))
-                    break;                   // no lock when adding to empty bin
-            }
-            else if ((fh = f.hash) == MOVED)
+            } else if ((f = tabAt(tab, i = (n - 1) & hash)) == null) {
+            	//如果数组当前位置为null,没有加锁，而是使用了cas
+                if (casTabAt(tab, i, null,new Node<K,V>(hash, key, value, null))) {
+                    //如果cas成功则跳出循环，否则重新开始
+                	break;                 
+                }
+            } else if ((fh = f.hash) == MOVED) {
+            	//如正在正在扩容，则当前下标已经移动完成，则帮助移动 
+            	//此时没有跳出循环,且tab变成了扩容后的newtab
                 tab = helpTransfer(tab, f);
-            else {
+            } else {
                 V oldVal = null;
                 synchronized (f) {
+                	//锁住头节点，当在添加时不会发生扩容
                     if (tabAt(tab, i) == f) {
                         if (fh >= 0) {
+                        	// fh >= 0为链表
                             binCount = 1;
                             for (Node<K,V> e = f;; ++binCount) {
                                 K ek;
@@ -554,12 +483,15 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
                                     ((ek = e.key) == key ||
                                      (ek != null && key.equals(ek)))) {
                                     oldVal = e.val;
-                                    if (!onlyIfAbsent)
+                                    if (!onlyIfAbsent) {
+                                    	//替换为新的value
                                         e.val = value;
+                                    }
                                     break;
                                 }
                                 Node<K,V> pred = e;
                                 if ((e = e.next) == null) {
+                                	//放到链表末尾
                                     pred.next = new Node<K,V>(hash, key,
                                                               value, null);
                                     break;
@@ -567,22 +499,31 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
                             }
                         }
                         else if (f instanceof TreeBin) {
+                        	//为红黑树时
                             Node<K,V> p;
                             binCount = 2;
                             if ((p = ((TreeBin<K,V>)f).putTreeVal(hash, key,
                                                            value)) != null) {
-                                oldVal = p.val;
-                                if (!onlyIfAbsent)
+                                //红黑树中存在相同的key
+                            	//如果不存在将在最后直接返回null
+                            	oldVal = p.val;
+                                if (!onlyIfAbsent) {
+                                	//替换旧值
                                     p.val = value;
+                                }
                             }
                         }
                     }
                 }
                 if (binCount != 0) {
-                    if (binCount >= TREEIFY_THRESHOLD)
+                    if (binCount >= TREEIFY_THRESHOLD) {
+                    	//链表插入时会binCount++ 链表长度大于8 链表转换为红黑树
                         treeifyBin(tab, i);
-                    if (oldVal != null)
+                    }
+                    if (oldVal != null) {
+                    	//如果有oldVal则说明容量没有变化，不需要考虑是否扩容
                         return oldVal;
+                    }
                     break;
                 }
             }
@@ -592,26 +533,17 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     }
 
     /**
-     * Copies all of the mappings from the specified map to this one.
-     * These mappings replace any mappings that this map had for any of the
-     * keys currently in the specified map.
-     *
-     * @param m mappings to be stored in this map
+     * 插入一个map
      */
     public void putAll(Map<? extends K, ? extends V> m) {
         tryPresize(m.size());
-        for (Map.Entry<? extends K, ? extends V> e : m.entrySet())
+        for (Map.Entry<? extends K, ? extends V> e : m.entrySet()) {
             putVal(e.getKey(), e.getValue(), false);
+        }
     }
 
     /**
-     * Removes the key (and its corresponding value) from this map.
-     * This method does nothing if the key is not in the map.
-     *
-     * @param  key the key that needs to be removed
-     * @return the previous value associated with {@code key}, or
-     *         {@code null} if there was no mapping for {@code key}
-     * @throws NullPointerException if the specified key is null
+     * 删除一个key-value
      */
     public V remove(Object key) {
         return replaceNode(key, null, null);
@@ -621,20 +553,25 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
      * Implementation for the four public remove/replace methods:
      * Replaces node value with v, conditional upon match of cv if
      * non-null.  If resulting value is null, delete.
+     * 替换或删除
+     * 替换节点的value，如果value为null就删除
      */
     final V replaceNode(Object key, V value, Object cv) {
         int hash = spread(key.hashCode());
         for (Node<K,V>[] tab = table;;) {
             Node<K,V> f; int n, i, fh;
             if (tab == null || (n = tab.length) == 0 ||
-                (f = tabAt(tab, i = (n - 1) & hash)) == null)
+                (f = tabAt(tab, i = (n - 1) & hash)) == null) {
+            	//如果为空
                 break;
-            else if ((fh = f.hash) == MOVED)
+            } else if ((fh = f.hash) == MOVED) {
+            	//如果正在扩容
                 tab = helpTransfer(tab, f);
-            else {
+            } else {
                 V oldVal = null;
                 boolean validated = false;
                 synchronized (f) {
+                	//锁住头结点
                     if (tabAt(tab, i) == f) {
                         if (fh >= 0) {
                             validated = true;
@@ -647,21 +584,26 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
                                     if (cv == null || cv == ev ||
                                         (ev != null && cv.equals(ev))) {
                                         oldVal = ev;
-                                        if (value != null)
+                                        if (value != null) {
+                                        	//替换为value
                                             e.val = value;
-                                        else if (pred != null)
+                                        } else if (pred != null) {
+                                        	//不是删除第一个
                                             pred.next = e.next;
-                                        else
+                                        } else {
+                                        	//删除第一个
                                             setTabAt(tab, i, e.next);
+                                        }
                                     }
                                     break;
                                 }
                                 pred = e;
-                                if ((e = e.next) == null)
+                                if ((e = e.next) == null) {
                                     break;
+                                }
                             }
-                        }
-                        else if (f instanceof TreeBin) {
+                        } else if (f instanceof TreeBin) {
+                        	//红黑树
                             validated = true;
                             TreeBin<K,V> t = (TreeBin<K,V>)f;
                             TreeNode<K,V> r, p;
@@ -671,10 +613,13 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
                                 if (cv == null || cv == pv ||
                                     (pv != null && cv.equals(pv))) {
                                     oldVal = pv;
-                                    if (value != null)
+                                    if (value != null) {
+                                    	//替换
                                         p.val = value;
-                                    else if (t.removeTreeNode(p))
+                                    } else if (t.removeTreeNode(p)) {
+                                    	//删除
                                         setTabAt(tab, i, untreeify(t.first));
+                                    }
                                 }
                             }
                         }
@@ -682,8 +627,9 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
                 }
                 if (validated) {
                     if (oldVal != null) {
-                        if (value == null)
+                        if (value == null) {
                             addCount(-1L, -1);
+                        }
                         return oldVal;
                     }
                     break;
@@ -694,22 +640,21 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     }
 
     /**
-     * Removes all of the mappings from this map.
+     * 清空
      */
     public void clear() {
-        long delta = 0L; // negative number of deletions
+        long delta = 0L; // 负数 删除的元素数量 negative number of deletions
         int i = 0;
         Node<K,V>[] tab = table;
         while (tab != null && i < tab.length) {
             int fh;
             Node<K,V> f = tabAt(tab, i);
-            if (f == null)
+            if (f == null) {
                 ++i;
-            else if ((fh = f.hash) == MOVED) {
+            } else if ((fh = f.hash) == MOVED) {
                 tab = helpTransfer(tab, f);
-                i = 0; // restart
-            }
-            else {
+                i = 0; // 重新开始
+            } else {
                 synchronized (f) {
                     if (tabAt(tab, i) == f) {
                         Node<K,V> p = (fh >= 0 ? f :
@@ -719,13 +664,15 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
                             --delta;
                             p = p.next;
                         }
+                        //线程安全到下一个tab
                         setTabAt(tab, i++, null);
                     }
                 }
             }
         }
-        if (delta != 0L)
+        if (delta != 0L) {
             addCount(delta, -1);
+        }
     }
 
     /**
@@ -884,8 +831,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     }
 
     /**
-     * Stripped-down version of helper class used in previous version,
-     * declared for the sake of serialization compatibility
+     * 为了兼容老版本
      */
     static class Segment<K,V> extends ReentrantLock implements Serializable {
         private static final long serialVersionUID = 2249069246763182397L;
@@ -1045,63 +991,46 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     // ConcurrentMap methods
 
     /**
-     * {@inheritDoc}
-     *
-     * @return the previous value associated with the specified key,
-     *         or {@code null} if there was no mapping for the key
-     * @throws NullPointerException if the specified key or value is null
+     * 如果不存在oldvalue则添加
      */
     public V putIfAbsent(K key, V value) {
         return putVal(key, value, true);
     }
 
     /**
-     * {@inheritDoc}
-     *
-     * @throws NullPointerException if the specified key is null
+     * 删除
      */
     public boolean remove(Object key, Object value) {
-        if (key == null)
+        if (key == null) {
             throw new NullPointerException();
+        }
         return value != null && replaceNode(key, null, value) != null;
     }
 
     /**
-     * {@inheritDoc}
-     *
-     * @throws NullPointerException if any of the arguments are null
+     * 替换
      */
     public boolean replace(K key, V oldValue, V newValue) {
-        if (key == null || oldValue == null || newValue == null)
+        if (key == null || oldValue == null || newValue == null) {
             throw new NullPointerException();
+        }
         return replaceNode(key, newValue, oldValue) != null;
     }
 
     /**
-     * {@inheritDoc}
-     *
-     * @return the previous value associated with the specified key,
-     *         or {@code null} if there was no mapping for the key
-     * @throws NullPointerException if the specified key or value is null
+     * 替换
      */
     public V replace(K key, V value) {
-        if (key == null || value == null)
+        if (key == null || value == null) {
             throw new NullPointerException();
+        }
         return replaceNode(key, value, null);
     }
 
     // Overrides of JDK8+ Map extension method defaults
 
     /**
-     * Returns the value to which the specified key is mapped, or the
-     * given default value if this map contains no mapping for the
-     * key.
-     *
-     * @param key the key whose associated value is to be returned
-     * @param defaultValue the value to return if this map contains
-     * no mapping for the given key
-     * @return the mapping for the key, if present; else the default value
-     * @throws NullPointerException if the specified key is null
+     * 根据key获取value 如果value为空则返回defaultValue
      */
     public V getOrDefault(Object key, V defaultValue) {
         V v;
@@ -1730,12 +1659,19 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     /* ---------------- Table Initialization and Resizing -------------- */
 
     /**
-     * Returns the stamp bits for resizing a table of size n.
-     * Must be negative when shifted left by RESIZE_STAMP_SHIFT.
+     * 1 -> 32799
+     * 2 -> 32798
+     * 3 -> 32797
+     * 4 -> 32796
+     * ......
+     * 1 << 30 -> 32769
+     * 返回一个标志位，该标志位经过RESIZE_STAMP_SHIFT左移必定为负数
      */
     static final int resizeStamp(int n) {
         return Integer.numberOfLeadingZeros(n) | (1 << (RESIZE_STAMP_BITS - 1));
     }
+    
+   
 
     /**
      * 初始化
@@ -1773,9 +1709,11 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
      * perform transfer if work is available.  Rechecks occupancy
      * after a transfer to see if another resize is already needed
      * because resizings are lagging additions.
+     * 扩容是在添加之后
      *
-     * @param x the count to add
-     * @param check if <0, don't check resize, if <= 1 only check if uncontended
+     * @param x 需要添加的数量
+     * @param check 如果小于0则不需要考虑扩容，if <0, don't check resize, if <= 1 only check if uncontended
+     * 可能有多个线程同时进来
      */
     private final void addCount(long x, int check) {
         CounterCell[] as; long b, s;
@@ -1783,6 +1721,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
             !U.compareAndSwapLong(this, BASECOUNT, b = baseCount, s = b + x)) {
             CounterCell a; long v; int m;
             boolean uncontended = true;
+            //如果多个线程都在执行，则CAS失败，执行fullAddCount，全部加入count
             if (as == null || (m = as.length - 1) < 0 ||
                 (a = as[ThreadLocalRandom.getProbe() & m]) == null ||
                 !(uncontended =
@@ -1796,20 +1735,25 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
         }
         if (check >= 0) {
             Node<K,V>[] tab, nt; int n, sc;
+            //基本的验证
             while (s >= (long)(sc = sizeCtl) && (tab = table) != null &&
                    (n = tab.length) < MAXIMUM_CAPACITY) {
                 int rs = resizeStamp(n);
                 if (sc < 0) {
+                	//小于0表示已经有线程在扩容
                     if ((sc >>> RESIZE_STAMP_SHIFT) != rs || sc == rs + 1 ||
                         sc == rs + MAX_RESIZERS || (nt = nextTable) == null ||
-                        transferIndex <= 0)
+                        transferIndex <= 0) {
                         break;
-                    if (U.compareAndSwapInt(this, SIZECTL, sc, sc + 1))
-                        transfer(tab, nt);
-                }
-                else if (U.compareAndSwapInt(this, SIZECTL, sc,
-                                             (rs << RESIZE_STAMP_SHIFT) + 2))
+                    }
+                    if (U.compareAndSwapInt(this, SIZECTL, sc, sc + 1)) {
+                       //帮助扩容
+                    	transfer(tab, nt);
+                    }
+                } else if (U.compareAndSwapInt(this, SIZECTL, sc,
+                                             (rs << RESIZE_STAMP_SHIFT) + 2)) {
                     transfer(tab, null);
+                }
                 s = sumCount();
             }
         }
@@ -1826,8 +1770,10 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
             while (nextTab == nextTable && table == tab &&
                    (sc = sizeCtl) < 0) {
                 if ((sc >>> RESIZE_STAMP_SHIFT) != rs || sc == rs + 1 ||
-                    sc == rs + MAX_RESIZERS || transferIndex <= 0)
+                    sc == rs + MAX_RESIZERS || transferIndex <= 0) {
+                	//不需要帮助扩容
                     break;
+                }
                 if (U.compareAndSwapInt(this, SIZECTL, sc, sc + 1)) {
                     transfer(tab, nextTab);
                     break;
@@ -1853,6 +1799,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
                 n = (sc > c) ? sc : c;
                 //CAS尝试将SIZECTL变为-1
                 if (U.compareAndSwapInt(this, SIZECTL, sc, -1)) {
+                	//只允许一个线程创建新的table
                     try {
                         if (table == tab) {
                             @SuppressWarnings("unchecked")
@@ -1888,17 +1835,18 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     }
 
     /**
-     * 将元素移到新的桶中
+     * 扩容核心部分，将元素移到新的数组中
      */
     private final void transfer(Node<K,V>[] tab, Node<K,V>[] nextTab) {
         int n = tab.length, stride;
         if ((stride = (NCPU > 1) ? (n >>> 3) / NCPU : n) < MIN_TRANSFER_STRIDE) {
             stride = MIN_TRANSFER_STRIDE; // subdivide range
         }
-        if (nextTab == null) {            // initiating
+        //为null则new一个
+        if (nextTab == null) {            
             try {
                 @SuppressWarnings("unchecked")
-                //创建一个容量翻倍的新桶
+                //创建一个容量翻倍的新数组
                 Node<K,V>[] nt = (Node<K,V>[])new Node<?,?>[n << 1];
                 nextTab = nt;
             } catch (Throwable ex) {   
@@ -1907,60 +1855,73 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
                 return;
             }
             nextTable = nextTab;
-            transferIndex = n;
+            transferIndex = n;// 倒序tab
         }
         int nextn = nextTab.length;
         ForwardingNode<K,V> fwd = new ForwardingNode<K,V>(nextTab);
+        //下一个
         boolean advance = true;
         boolean finishing = false; // to ensure sweep before committing nextTab
         for (int i = 0, bound = 0;;) {
             Node<K,V> f; int fh;
+            //遍历原hash表中的节点,找到下一个要处理的下标
             while (advance) {
+            	//下个地址 下个边界
                 int nextIndex, nextBound;
-                if (--i >= bound || finishing)
+                if (--i >= bound || finishing) {
                     advance = false;
-                else if ((nextIndex = transferIndex) <= 0) {
+                } else if ((nextIndex = transferIndex) <= 0) {
                     i = -1;
                     advance = false;
-                }
-                else if (U.compareAndSwapInt
+                } else if (U.compareAndSwapInt //用CAS计算得到的transferIndex
                          (this, TRANSFERINDEX, nextIndex,
                           nextBound = (nextIndex > stride ?
                                        nextIndex - stride : 0))) {
                     bound = nextBound;
-                    i = nextIndex - 1;
+                    i = nextIndex - 1; //下一个要处理的下标
                     advance = false;
                 }
             }
             if (i < 0 || i >= n || i + n >= nextn) {
+            	//i越界，可能已经完成元素迁移操作
                 int sc;
+                // 已经完成所有节点复制了
                 if (finishing) {
-                    nextTable = null;
+                    nextTable = null; //gc
                     table = nextTab;
-                    sizeCtl = (n << 1) - (n >>> 1);
+                    sizeCtl = (n << 1) - (n >>> 1); //新n的0.75
                     return;
                 }
+                // CAS更新sizeCtl，sc-1表示新加入一个线程参与扩容操作
                 if (U.compareAndSwapInt(this, SIZECTL, sc = sizeCtl, sc - 1)) {
-                    if ((sc - 2) != resizeStamp(n) << RESIZE_STAMP_SHIFT)
+                    if ((sc - 2) != resizeStamp(n) << RESIZE_STAMP_SHIFT) {
                         return;
+                    }
                     finishing = advance = true;
                     i = n; // recheck before commit
                 }
-            }
-            else if ((f = tabAt(tab, i)) == null)
+            } else if ((f = tabAt(tab, i)) == null) {
+            	// 遍历的节点为null，则放入到ForwardingNode 指针节点
                 advance = casTabAt(tab, i, null, fwd);
-            else if ((fh = f.hash) == MOVED)
-                advance = true; // already processed
-            else {
+            } else if ((fh = f.hash) == MOVED) {
+                advance = true; // 已经处理过啦
+            } else {
                 synchronized (f) {
+                	//锁住头结点 ，开始转移
                     if (tabAt(tab, i) == f) {
+                    	//hn需要移动位置 ln不需要移动位置
                         Node<K,V> ln, hn;
+                        //fh >= 0 ,表示为链表节点 trees为-2
                         if (fh >= 0) {
+                        	//构造两个链表  一个是原链表  另一个是原链表的反序排列
+                        	//runBit=0则表明不需要移动位置
                             int runBit = fh & n;
                             Node<K,V> lastRun = f;
                             for (Node<K,V> p = f.next; p != null; p = p.next) {
                                 int b = p.hash & n;
                                 if (b != runBit) {
+                                	//链表要分成两个链表
+                                	//链表中最后一个与头节点将不在同一条链表中的节点
                                     runBit = b;
                                     lastRun = p;
                                 }
@@ -1968,55 +1929,67 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
                             if (runBit == 0) {
                                 ln = lastRun;
                                 hn = null;
-                            }
-                            else {
+                            } else {
                                 hn = lastRun;
                                 ln = null;
                             }
                             for (Node<K,V> p = f; p != lastRun; p = p.next) {
+                            	//将拆分2个链表，除lastRun还在最后一个，其余为原链表的倒序
+                            	//倒序可以最先处理掉最后一个元素的next为null
                                 int ph = p.hash; K pk = p.key; V pv = p.val;
-                                if ((ph & n) == 0)
+                                if ((ph & n) == 0) {
                                     ln = new Node<K,V>(ph, pk, pv, ln);
-                                else
+                                } else {
                                     hn = new Node<K,V>(ph, pk, pv, hn);
+                                }
                             }
+                            //将ln插在新链表的原下标i处
                             setTabAt(nextTab, i, ln);
+                            //将hn插在新链表的新下标i+n处
                             setTabAt(nextTab, i + n, hn);
+                            //在table i 位置处插上ForwardingNode 表示该节点已经处理过了
                             setTabAt(tab, i, fwd);
                             advance = true;
-                        }
-                        else if (f instanceof TreeBin) {
+                        } else if (f instanceof TreeBin) {
                             TreeBin<K,V> t = (TreeBin<K,V>)f;
                             TreeNode<K,V> lo = null, loTail = null;
                             TreeNode<K,V> hi = null, hiTail = null;
                             int lc = 0, hc = 0;
+                            //遍历树，将树拆成2个链表
                             for (Node<K,V> e = t.first; e != null; e = e.next) {
                                 int h = e.hash;
                                 TreeNode<K,V> p = new TreeNode<K,V>
                                     (h, e.key, e.val, null, null);
                                 if ((h & n) == 0) {
-                                    if ((p.prev = loTail) == null)
+                                    if ((p.prev = loTail) == null) {
+                                    	//如果loTail为null，则p为头结点
                                         lo = p;
-                                    else
+                                    } else {
                                         loTail.next = p;
+                                    }
                                     loTail = p;
                                     ++lc;
-                                }
-                                else {
-                                    if ((p.prev = hiTail) == null)
+                                } else {
+                                    if ((p.prev = hiTail) == null) {
+                                    	//p为头结点
                                         hi = p;
-                                    else
+                                    } else {
                                         hiTail.next = p;
+                                    }
                                     hiTail = p;
                                     ++hc;
                                 }
                             }
+                            //判断是转成红黑树还是链表
                             ln = (lc <= UNTREEIFY_THRESHOLD) ? untreeify(lo) :
                                 (hc != 0) ? new TreeBin<K,V>(lo) : t;
                             hn = (hc <= UNTREEIFY_THRESHOLD) ? untreeify(hi) :
                                 (lc != 0) ? new TreeBin<K,V>(hi) : t;
+                            //将ln插在新链表的原下标i处
                             setTabAt(nextTab, i, ln);
+                            //将hn插在新链表的新下标i+n处
                             setTabAt(nextTab, i + n, hn);
+                            //设置已经处理标识
                             setTabAt(tab, i, fwd);
                             advance = true;
                         }
@@ -2037,13 +2010,15 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
         CounterCell(long x) { value = x; }
     }
 
+    //添加和删除后修改总数量
     final long sumCount() {
         CounterCell[] as = counterCells; CounterCell a;
         long sum = baseCount;
         if (as != null) {
             for (int i = 0; i < as.length; ++i) {
-                if ((a = as[i]) != null)
+                if ((a = as[i]) != null) {
                     sum += a.value;
+                }
             }
         }
         return sum;
@@ -2055,11 +2030,13 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
         if ((h = ThreadLocalRandom.getProbe()) == 0) {
             ThreadLocalRandom.localInit();      // force initialization
             h = ThreadLocalRandom.getProbe();
+            //没有竞争
             wasUncontended = true;
         }
         boolean collide = false;                // True if last slot nonempty
         for (;;) {
             CounterCell[] as; CounterCell a; int n; long v;
+            //counterCells是volatile，具有可见性
             if ((as = counterCells) != null && (n = as.length) > 0) {
                 if ((a = as[(n - 1) & h]) == null) {
                     if (cellsBusy == 0) {            // Try to attach new Cell
@@ -2084,16 +2061,15 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
                         }
                     }
                     collide = false;
-                }
-                else if (!wasUncontended)       // CAS already known to fail
+                } else if (!wasUncontended) {      // CAS already known to fail
                     wasUncontended = true;      // Continue after rehash
-                else if (U.compareAndSwapLong(a, CELLVALUE, v = a.value, v + x))
+                } else if (U.compareAndSwapLong(a, CELLVALUE, v = a.value, v + x)) {
                     break;
-                else if (counterCells != as || n >= NCPU)
+                } else if (counterCells != as || n >= NCPU) {
                     collide = false;            // At max size or stale
-                else if (!collide)
+                } else if (!collide) {
                     collide = true;
-                else if (cellsBusy == 0 &&
+                } else if (cellsBusy == 0 &&
                          U.compareAndSwapInt(this, CELLSBUSY, 0, 1)) {
                     try {
                         if (counterCells == as) {// Expand table unless stale
@@ -2109,13 +2085,14 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
                     continue;                   // Retry with expanded table
                 }
                 h = ThreadLocalRandom.advanceProbe(h);
-            }
-            else if (cellsBusy == 0 && counterCells == as &&
+            } else if (cellsBusy == 0 && counterCells == as &&
                      U.compareAndSwapInt(this, CELLSBUSY, 0, 1)) {
+            	//counterCells为null的时候
                 boolean init = false;
                 try {                           // Initialize table
                     if (counterCells == as) {
                         CounterCell[] rs = new CounterCell[2];
+                        //new一个CounterCell， x为要添加的数量
                         rs[h & 1] = new CounterCell(x);
                         counterCells = rs;
                         init = true;
@@ -2123,11 +2100,15 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
                 } finally {
                     cellsBusy = 0;
                 }
-                if (init)
+                if (init) {
+                	//跳槽死循环
                     break;
+                }
             }
-            else if (U.compareAndSwapLong(this, BASECOUNT, v = baseCount, v + x))
-                break;                          // Fall back on using base
+            else if (U.compareAndSwapLong(this, BASECOUNT, v = baseCount, v + x)) {
+            	//跳槽死循环
+            	break;                          // Fall back on using base
+            }
         }
     }
 
@@ -2136,24 +2117,28 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     /**
      * Replaces all linked nodes in bin at given index unless table is
      * too small, in which case resizes instead.
+     * 转化为红黑树，但是数量太小时是扩容
      */
     private final void treeifyBin(Node<K,V>[] tab, int index) {
         Node<K,V> b; int n, sc;
         if (tab != null) {
-            if ((n = tab.length) < MIN_TREEIFY_CAPACITY)
+            if ((n = tab.length) < MIN_TREEIFY_CAPACITY) {
+            	//数组太小，不进行树形化，扩容
                 tryPresize(n << 1);
-            else if ((b = tabAt(tab, index)) != null && b.hash >= 0) {
+            } else if ((b = tabAt(tab, index)) != null && b.hash >= 0) {
                 synchronized (b) {
+                	//锁住链表头
                     if (tabAt(tab, index) == b) {
                         TreeNode<K,V> hd = null, tl = null;
                         for (Node<K,V> e = b; e != null; e = e.next) {
-                            TreeNode<K,V> p =
-                                new TreeNode<K,V>(e.hash, e.key, e.val,
-                                                  null, null);
-                            if ((p.prev = tl) == null)
+                        	//遍历链表,将节点转化为树节点
+                            TreeNode<K,V> p = new TreeNode<K,V>(e.hash, e.key, e.val, null, null);
+                            if ((p.prev = tl) == null) {
+                            	//头结点
                                 hd = p;
-                            else
+                            } else {
                                 tl.next = p;
+                            }
                             tl = p;
                         }
                         setTabAt(tab, index, new TreeBin<K,V>(hd));
@@ -2164,7 +2149,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     }
 
     /**
-     * Returns a list on non-TreeNodes replacing those in given list.
+     * 将TreeNode转成链表.
      */
     static <K,V> Node<K,V> untreeify(Node<K,V> b) {
         Node<K,V> hd = null, tl = null;
@@ -2272,7 +2257,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
         }
 
         /**
-         * Creates bin with initial set of nodes headed by b.
+         * 通过头结点将树节点链表转换为红黑树 hash为-2
          */
         TreeBin(TreeNode<K,V> b) {
             super(TREEBIN, null, null, null);
@@ -2293,21 +2278,24 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
                     for (TreeNode<K,V> p = r;;) {
                         int dir, ph;
                         K pk = p.key;
-                        if ((ph = p.hash) > h)
+                        if ((ph = p.hash) > h) {
                             dir = -1;
-                        else if (ph < h)
+                        } else if (ph < h) {
                             dir = 1;
-                        else if ((kc == null &&
+                        } else if ((kc == null &&
                                   (kc = comparableClassFor(k)) == null) ||
-                                 (dir = compareComparables(kc, k, pk)) == 0)
+                                 (dir = compareComparables(kc, k, pk)) == 0) {
                             dir = tieBreakOrder(k, pk);
-                            TreeNode<K,V> xp = p;
+                        }
+                        TreeNode<K,V> xp = p;
+                      
                         if ((p = (dir <= 0) ? p.left : p.right) == null) {
                             x.parent = xp;
-                            if (dir <= 0)
+                            if (dir <= 0) {
                                 xp.left = x;
-                            else
+                            } else {
                                 xp.right = x;
+                            }
                             r = balanceInsertion(r, x);
                             break;
                         }
@@ -2597,6 +2585,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
             return root;
         }
 
+        /*红黑树插入后恢复特性*/
         static <K,V> TreeNode<K,V> balanceInsertion(TreeNode<K,V> root,
                                                     TreeNode<K,V> x) {
             x.red = true;
@@ -2652,6 +2641,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
             }
         }
 
+        /*红黑树删除后恢复特性*/
         static <K,V> TreeNode<K,V> balanceDeletion(TreeNode<K,V> root,
                                                    TreeNode<K,V> x) {
             for (TreeNode<K,V> xp, xpl, xpr;;)  {
@@ -5804,6 +5794,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     }
 
     // Unsafe mechanics
+    // mechanics 结构
     private static final sun.misc.Unsafe U;
     private static final long SIZECTL;
     private static final long TRANSFERINDEX;
