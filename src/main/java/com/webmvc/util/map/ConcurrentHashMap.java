@@ -33,6 +33,7 @@ import java.util.function.ToLongBiFunction;
 import java.util.function.ToLongFunction;
 
 /**
+ * 	-----无法直接使用Unsafe----
  *  1.8的ConcurrentHashMap不再使用Segment啦
  */
 public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> ,Serializable{
