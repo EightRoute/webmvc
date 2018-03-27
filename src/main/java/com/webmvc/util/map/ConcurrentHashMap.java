@@ -56,8 +56,7 @@ public class ConcurrentHashMap<K, V> extends AbstractMap<K, V> implements Concur
     static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
 
     /**
-     * The default concurrency level for this table. Unused but
-     * defined for compatibility with previous versions of this class.
+     * 为了兼容之前的版本，没用
      */
     private static final int DEFAULT_CONCURRENCY_LEVEL = 16;
 

@@ -1,5 +1,8 @@
 package com.webmvc.util.locks;
 
+/**
+ * 只有一个变量exclusiveOwnerThread表示占用该锁的线程
+ */
 public class AbstractOwnableSynchronizer  implements java.io.Serializable {
 
 
@@ -8,7 +11,7 @@ public class AbstractOwnableSynchronizer  implements java.io.Serializable {
 
     protected AbstractOwnableSynchronizer() { }
 
-
+    //占用该锁的线程
     private transient Thread exclusiveOwnerThread;
 
 
