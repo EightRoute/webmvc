@@ -501,6 +501,7 @@ public abstract class AbstractQueuedSynchronizer
         try {
         	//标记线程是否被中断过
             boolean interrupted = false;
+            //自旋， 直到获取到同步状态，但只有前驱节点是首节点才可以尝试获取
             for (;;) {
                 final Node p = node.predecessor();
                 // 如果前驱节点为head则当前节点去尝试获取锁
@@ -599,6 +600,7 @@ public abstract class AbstractQueuedSynchronizer
         try {
             boolean interrupted = false;
             for (;;) {
+                //退出自旋的条件为tryAcquireShared(arg)>0
                 final Node p = node.predecessor();
                 if (p == head) {
                     int r = tryAcquireShared(arg);
@@ -838,6 +840,7 @@ public abstract class AbstractQueuedSynchronizer
      * @param arg the acquire argument.  This value is conveyed to
      *        {@link #tryAcquireShared} but is otherwise uninterpreted
      *        and can represent anything you like.
+     * 共享式访问资源时，其他共享式访问均被允许
      */
     public final void acquireShared(int arg) {
         if (tryAcquireShared(arg) < 0)
