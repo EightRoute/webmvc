@@ -22,6 +22,7 @@ public class LockSupport {
 
     /**
      * 线程将一直阻塞直到超时或者中断等条件出现
+     * blocker是用来标识当前线程等待的对象，主要用来问题排查和系统监控
      */
     public static void park(Object blocker) {
         Thread t = Thread.currentThread();
@@ -31,36 +32,8 @@ public class LockSupport {
     }
 
     /**
-     * Disables the current thread for thread scheduling purposes, for up to
-     * the specified waiting time, unless the permit is available.
-     *
-     * <p>If the permit is available then it is consumed and the call
-     * returns immediately; otherwise the current thread becomes disabled
-     * for thread scheduling purposes and lies dormant until one of four
-     * things happens:
-     *
-     * <ul>
-     * <li>Some other thread invokes {@link #unpark unpark} with the
-     * current thread as the target; or
-     *
-     * <li>Some other thread {@linkplain Thread#interrupt interrupts}
-     * the current thread; or
-     *
-     * <li>The specified waiting time elapses; or
-     *
-     * <li>The call spuriously (that is, for no reason) returns.
-     * </ul>
-     *
-     * <p>This method does <em>not</em> report which of these caused the
-     * method to return. Callers should re-check the conditions which caused
-     * the thread to park in the first place. Callers may also determine,
-     * for example, the interrupt status of the thread, or the elapsed time
-     * upon return.
-     *
-     * @param blocker the synchronization object responsible for this
-     *        thread parking
-     * @param nanos the maximum number of nanoseconds to wait
-     * @since 1.6
+     * blocker是用来标识当前线程等待的对象，主要用来问题排查和系统监控
+     * nanos是从1970年开始到deadline时间的毫秒数
      */
     public static void parkNanos(Object blocker, long nanos) {
         if (nanos > 0) {
@@ -72,37 +45,8 @@ public class LockSupport {
     }
 
     /**
-     * Disables the current thread for thread scheduling purposes, until
-     * the specified deadline, unless the permit is available.
-     *
-     * <p>If the permit is available then it is consumed and the call
-     * returns immediately; otherwise the current thread becomes disabled
-     * for thread scheduling purposes and lies dormant until one of four
-     * things happens:
-     *
-     * <ul>
-     * <li>Some other thread invokes {@link #unpark unpark} with the
-     * current thread as the target; or
-     *
-     * <li>Some other thread {@linkplain Thread#interrupt interrupts} the
-     * current thread; or
-     *
-     * <li>The specified deadline passes; or
-     *
-     * <li>The call spuriously (that is, for no reason) returns.
-     * </ul>
-     *
-     * <p>This method does <em>not</em> report which of these caused the
-     * method to return. Callers should re-check the conditions which caused
-     * the thread to park in the first place. Callers may also determine,
-     * for example, the interrupt status of the thread, or the current time
-     * upon return.
-     *
-     * @param blocker the synchronization object responsible for this
-     *        thread parking
-     * @param deadline the absolute time, in milliseconds from the Epoch,
-     *        to wait until
-     * @since 1.6
+     * blocker是用来标识当前线程等待的对象，主要用来问题排查和系统监控
+     * nanos是从1970年开始到deadline时间的毫秒数
      */
     public static void parkUntil(Object blocker, long deadline) {
         Thread t = Thread.currentThread();
@@ -112,16 +56,7 @@ public class LockSupport {
     }
 
     /**
-     * Returns the blocker object supplied to the most recent
-     * invocation of a park method that has not yet unblocked, or null
-     * if not blocked.  The value returned is just a momentary
-     * snapshot -- the thread may have since unblocked or blocked on a
-     * different blocker object.
-     *
-     * @param t the thread
-     * @return the blocker
-     * @throws NullPointerException if argument is null
-     * @since 1.6
+     * 返回blocker对象
      */
     public static Object getBlocker(Thread t) {
         if (t == null)
@@ -130,62 +65,14 @@ public class LockSupport {
     }
 
     /**
-     * Disables the current thread for thread scheduling purposes unless the
-     * permit is available.
-     *
-     * <p>If the permit is available then it is consumed and the call
-     * returns immediately; otherwise the current thread becomes disabled
-     * for thread scheduling purposes and lies dormant until one of three
-     * things happens:
-     *
-     * <ul>
-     *
-     * <li>Some other thread invokes {@link #unpark unpark} with the
-     * current thread as the target; or
-     *
-     * <li>Some other thread {@linkplain Thread#interrupt interrupts}
-     * the current thread; or
-     *
-     * <li>The call spuriously (that is, for no reason) returns.
-     * </ul>
-     *
-     * <p>This method does <em>not</em> report which of these caused the
-     * method to return. Callers should re-check the conditions which caused
-     * the thread to park in the first place. Callers may also determine,
-     * for example, the interrupt status of the thread upon return.
+     * 阻塞当前线程，直到调用unpark方法或当前线程被中断
      */
     public static void park() {
         UNSAFE.park(false, 0L);
     }
 
     /**
-     * Disables the current thread for thread scheduling purposes, for up to
-     * the specified waiting time, unless the permit is available.
-     *
-     * <p>If the permit is available then it is consumed and the call
-     * returns immediately; otherwise the current thread becomes disabled
-     * for thread scheduling purposes and lies dormant until one of four
-     * things happens:
-     *
-     * <ul>
-     * <li>Some other thread invokes {@link #unpark unpark} with the
-     * current thread as the target; or
-     *
-     * <li>Some other thread {@linkplain Thread#interrupt interrupts}
-     * the current thread; or
-     *
-     * <li>The specified waiting time elapses; or
-     *
-     * <li>The call spuriously (that is, for no reason) returns.
-     * </ul>
-     *
-     * <p>This method does <em>not</em> report which of these caused the
-     * method to return. Callers should re-check the conditions which caused
-     * the thread to park in the first place. Callers may also determine,
-     * for example, the interrupt status of the thread, or the elapsed time
-     * upon return.
-     *
-     * @param nanos the maximum number of nanoseconds to wait
+     * 阻塞当前线程，最长不超过nanos毫秒
      */
     public static void parkNanos(long nanos) {
         if (nanos > 0)
@@ -193,34 +80,7 @@ public class LockSupport {
     }
 
     /**
-     * Disables the current thread for thread scheduling purposes, until
-     * the specified deadline, unless the permit is available.
-     *
-     * <p>If the permit is available then it is consumed and the call
-     * returns immediately; otherwise the current thread becomes disabled
-     * for thread scheduling purposes and lies dormant until one of four
-     * things happens:
-     *
-     * <ul>
-     * <li>Some other thread invokes {@link #unpark unpark} with the
-     * current thread as the target; or
-     *
-     * <li>Some other thread {@linkplain Thread#interrupt interrupts}
-     * the current thread; or
-     *
-     * <li>The specified deadline passes; or
-     *
-     * <li>The call spuriously (that is, for no reason) returns.
-     * </ul>
-     *
-     * <p>This method does <em>not</em> report which of these caused the
-     * method to return. Callers should re-check the conditions which caused
-     * the thread to park in the first place. Callers may also determine,
-     * for example, the interrupt status of the thread, or the current time
-     * upon return.
-     *
-     * @param deadline the absolute time, in milliseconds from the Epoch,
-     *        to wait until
+     * nanos是从1970年开始到deadline时间的毫秒数
      */
     public static void parkUntil(long deadline) {
         UNSAFE.park(true, deadline);

@@ -1219,22 +1219,14 @@ public class ReentrantReadWriteLock
     }
 
     /**
-     * Queries the number of read locks held for this lock. This
-     * method is designed for use in monitoring system state, not for
-     * synchronization control.
-     * @return the number of read locks held
+     * 当前读锁被获取的次数，统一线程连续获取也计数
      */
     public int getReadLockCount() {
         return sync.getReadLockCount();
     }
 
     /**
-     * Queries if the write lock is held by any thread. This method is
-     * designed for use in monitoring system state, not for
-     * synchronization control.
-     *
-     * @return {@code true} if any thread holds the write lock and
-     *         {@code false} otherwise
+     * 写锁是否被获取
      */
     public boolean isWriteLocked() {
         return sync.isWriteLocked();
@@ -1251,25 +1243,14 @@ public class ReentrantReadWriteLock
     }
 
     /**
-     * Queries the number of reentrant write holds on this lock by the
-     * current thread.  A writer thread has a hold on a lock for
-     * each lock action that is not matched by an unlock action.
-     *
-     * @return the number of holds on the write lock by the current thread,
-     *         or zero if the write lock is not held by the current thread
+     * 当前写锁被获取的次数
      */
     public int getWriteHoldCount() {
         return sync.getWriteHoldCount();
     }
 
     /**
-     * Queries the number of reentrant read holds on this lock by the
-     * current thread.  A reader thread has a hold on a lock for
-     * each lock action that is not matched by an unlock action.
-     *
-     * @return the number of holds on the read lock by the current thread,
-     *         or zero if the read lock is not held by the current thread
-     * @since 1.6
+     * 当前线程获取读锁的次数
      */
     public int getReadHoldCount() {
         return sync.getReadHoldCount();
