@@ -1,7 +1,5 @@
 package com.webmvc.util.locks;
 
-import java.util.Date;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.TimeUnit;
 import java.util.Date;
@@ -10,6 +8,7 @@ import java.util.Date;
 public interface Condition {
 
     /**
+     * 如果一个线程调用await方法，该线程将会释放锁，构造成节点加入到等待队列并进入等待状态
      * 进入等待状态直到被通知或中断
      */
     void await() throws InterruptedException;

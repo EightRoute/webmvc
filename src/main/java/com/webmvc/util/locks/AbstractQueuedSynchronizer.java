@@ -1356,9 +1356,9 @@ public abstract class AbstractQueuedSynchronizer
     public class ConditionObject implements Condition, java.io.Serializable {
 
 		private static final long serialVersionUID = -4633839847275796801L;
-		/** First node of condition queue. */
+		/** 等待队列首节点. */
         private transient Node firstWaiter;
-        /** Last node of condition queue. */
+        /** 等待队列尾节点. */
         private transient Node lastWaiter;
 
         /**
