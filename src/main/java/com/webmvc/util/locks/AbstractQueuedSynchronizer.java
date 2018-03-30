@@ -123,7 +123,10 @@ public abstract class AbstractQueuedSynchronizer
     private transient volatile Node tail;
 
     /**
-     * 同步状态，0表示未锁，大于0表示重入的次数
+     * 同步状态
+     * 0表示未锁，大于0表示重入的次数
+     * 读写锁中前16位为读锁的状态
+     * 后16位写锁的状态
      */
     private volatile int state;
 
@@ -530,8 +533,9 @@ public abstract class AbstractQueuedSynchronizer
                     if (r >= 0) {
                         setHeadAndPropagate(node, r);
                         p.next = null; // help GC
-                        if (interrupted)
+                        if (interrupted) {
                             selfInterrupt();
+                        }
                         failed = false;
                         return;
                     }
