@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Created by A550V
+ * Created by sgz
  * 2018/3/4 23:02
- * 要根据次对象生成代理对象
+ * 要根据对象生成代理对象
  */
 public class ProxyBean {
 

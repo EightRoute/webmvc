@@ -203,6 +203,7 @@ public class ReentrantLock implements Lock, java.io.Serializable {
 
     /**
      * 响应中断的获取锁 
+     * interrupted会唤醒线程
      * @throws InterruptedException 如果当前线程被interrupted
      */
     public void lockInterruptibly() throws InterruptedException {

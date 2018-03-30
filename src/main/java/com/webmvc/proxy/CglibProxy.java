@@ -13,7 +13,7 @@ import net.sf.cglib.proxy.MethodInterceptor;
 import net.sf.cglib.proxy.MethodProxy;
 
 /**
- * Created by A550V
+ * Created by sgz
  * 2018/3/5 20:24
  * 使用cglib生成代理对象
  * cglib使用继承 JDK使用接口  JDK需要接口
