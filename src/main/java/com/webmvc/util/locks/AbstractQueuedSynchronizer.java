@@ -22,83 +22,7 @@ public abstract class AbstractQueuedSynchronizer
     protected AbstractQueuedSynchronizer() { }
 
     /**
-     * Wait queue node class.
-     *
-     * <p>The wait queue is a variant of a "CLH" (Craig, Landin, and
-     * Hagersten) lock queue. CLH locks are normally used for
-     * spinlocks.  We instead use them for blocking synchronizers, but
-     * use the same basic tactic of holding some of the control
-     * information about a thread in the predecessor of its node.  A
-     * "status" field in each node keeps track of whether a thread
-     * should block.  A node is signalled when its predecessor
-     * releases.  Each node of the queue otherwise serves as a
-     * specific-notification-style monitor holding a single waiting
-     * thread. The status field does NOT control whether threads are
-     * granted locks etc though.  A thread may try to acquire if it is
-     * first in the queue. But being first does not guarantee success;
-     * it only gives the right to contend.  So the currently released
-     * contender thread may need to rewait.
-     *
-     * <p>To enqueue into a CLH lock, you atomically splice it in as new
-     * tail. To dequeue, you just set the head field.
-     * <pre>
-     *      +------+  prev +-----+       +-----+
-     * head |      | <---- |     | <---- |     |  tail
-     *      +------+       +-----+       +-----+
-     * </pre>
-     *
-     * <p>Insertion into a CLH queue requires only a single atomic
-     * operation on "tail", so there is a simple atomic point of
-     * demarcation from unqueued to queued. Similarly, dequeuing
-     * involves only updating the "head". However, it takes a bit
-     * more work for nodes to determine who their successors are,
-     * in part to deal with possible cancellation due to timeouts
-     * and interrupts.
-     *
-     * <p>The "prev" links (not used in original CLH locks), are mainly
-     * needed to handle cancellation. If a node is cancelled, its
-     * successor is (normally) relinked to a non-cancelled
-     * predecessor. For explanation of similar mechanics in the case
-     * of spin locks, see the papers by Scott and Scherer at
-     * http://www.cs.rochester.edu/u/scott/synchronization/
-     *
-     * <p>We also use "next" links to implement blocking mechanics.
-     * The thread id for each node is kept in its own node, so a
-     * predecessor signals the next node to wake up by traversing
-     * next link to determine which thread it is.  Determination of
-     * successor must avoid races with newly queued nodes to set
-     * the "next" fields of their predecessors.  This is solved
-     * when necessary by checking backwards from the atomically
-     * updated "tail" when a node's successor appears to be null.
-     * (Or, said differently, the next-links are an optimization
-     * so that we don't usually need a backward scan.)
-     *
-     * <p>Cancellation introduces some conservatism to the basic
-     * algorithms.  Since we must poll for cancellation of other
-     * nodes, we can miss noticing whether a cancelled node is
-     * ahead or behind us. This is dealt with by always unparking
-     * successors upon cancellation, allowing them to stabilize on
-     * a new predecessor, unless we can identify an uncancelled
-     * predecessor who will carry this responsibility.
-     *
-     * <p>CLH queues need a dummy header node to get started. But
-     * we don't create them on construction, because it would be wasted
-     * effort if there is never contention. Instead, the node
-     * is constructed and head and tail pointers are set upon first
-     * contention.
-     *
-     * <p>Threads waiting on Conditions use the same nodes, but
-     * use an additional link. Conditions only need to link nodes
-     * in simple (non-concurrent) linked queues because they are
-     * only accessed when exclusively held.  Upon await, a node is
-     * inserted into a condition queue.  Upon signal, the node is
-     * transferred to the main queue.  A special value of status
-     * field is used to mark which queue a node is on.
-     *
-     * <p>Thanks go to Dave Dice, Mark Moir, Victor Luchangco, Bill
-     * Scherer and Michael Scott, along with members of JSR-166
-     * expert group, for helpful ideas, discussions, and critiques
-     * on the design of this class.
+     * 等待队列的节点类
      */
     static final class Node {
         /** 表示节点正处在共享模式下等待的标记 */
@@ -294,24 +218,23 @@ public abstract class AbstractQueuedSynchronizer
          * fails or if status is changed by waiting thread.
          */
         int ws = node.waitStatus;
-        if (ws < 0)
+        if (ws < 0) {
             compareAndSetWaitStatus(node, ws, 0);
-
-        /*
-         * Thread to unpark is held in successor, which is normally
-         * just the next node.  But if cancelled or apparently null,
-         * traverse backwards from tail to find the actual
-         * non-cancelled successor.
-         */
+        }
         Node s = node.next;
         if (s == null || s.waitStatus > 0) {
+        	//等于空或被取消时
             s = null;
+            //从尾部开始遍历寻找一个没有被取消的后继节点，但只有前驱节点是首节点才可以尝试获取锁
             for (Node t = tail; t != null && t != node; t = t.prev)
-                if (t.waitStatus <= 0)
+                if (t.waitStatus <= 0) {
                     s = t;
+                }
         }
-        if (s != null)
+        if (s != null) {
+        	//唤醒线程
             LockSupport.unpark(s.thread);
+        }
     }
 
     /**
@@ -444,7 +367,7 @@ public abstract class AbstractQueuedSynchronizer
              */
             return true;
         }
-        // 前驱节点状态为CANCELLED 
+        // ws > 0，前驱节点状态为CANCELLED 
         if (ws > 0) {
             /*
              * 从队尾向前寻找第一个状态不为CANCELLED的节点 
@@ -494,18 +417,19 @@ public abstract class AbstractQueuedSynchronizer
      *
      * @param node the node
      * @param arg the acquire argument
-     * @return {@code true} if interrupted while waiting
+     * @return waiting是否被中断
      */
     final boolean acquireQueued(final Node node, int arg) {
         boolean failed = true;
         try {
         	//标记线程是否被中断过
             boolean interrupted = false;
-            //自旋， 直到获取到同步状态，但只有前驱节点是首节点才可以尝试获取
+            //自旋， 直到获取到同步状态，但只有前驱节点是首节点才可以尝试获取锁
             for (;;) {
                 final Node p = node.predecessor();
                 // 如果前驱节点为head则当前节点去尝试获取锁
                 if (p == head && tryAcquire(arg)) {
+                	//成功获取锁会将自己设为头节点
                     setHead(node);
                     p.next = null; // help GC
                     failed = false;
@@ -520,6 +444,7 @@ public abstract class AbstractQueuedSynchronizer
             }
         } finally {
             if (failed) {
+            	//如果已经获取到锁
                 cancelAcquire(node);
             }
         }
@@ -779,10 +704,12 @@ public abstract class AbstractQueuedSynchronizer
      */
     public final void acquireInterruptibly(int arg)
             throws InterruptedException {
-        if (Thread.interrupted())
+        if (Thread.interrupted()) {
             throw new InterruptedException();
-        if (!tryAcquire(arg))
+        }
+        if (!tryAcquire(arg)) {
             doAcquireInterruptibly(arg);
+        }
     }
 
     /**
@@ -811,20 +738,15 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
-     * Releases in exclusive mode.  Implemented by unblocking one or
-     * more threads if {@link #tryRelease} returns true.
-     * This method can be used to implement method {@link Lock#unlock}.
-     *
-     * @param arg the release argument.  This value is conveyed to
-     *        {@link #tryRelease} but is otherwise uninterpreted and
-     *        can represent anything you like.
-     * @return the value returned from {@link #tryRelease}
+     * 释放
      */
     public final boolean release(int arg) {
         if (tryRelease(arg)) {
             Node h = head;
-            if (h != null && h.waitStatus != 0)
+            if (h != null && h.waitStatus != 0) {
+            	//唤醒后继节点
                 unparkSuccessor(h);
+            }
             return true;
         }
         return false;
@@ -1704,22 +1626,14 @@ public abstract class AbstractQueuedSynchronizer
         //  support for instrumentation
 
         /**
-         * Returns true if this condition was created by the given
-         * synchronization object.
-         *
-         * @return {@code true} if owned
+         * @return 当前condition是否为参数中的对象创建的
          */
         final boolean isOwnedBy(AbstractQueuedSynchronizer sync) {
             return sync == AbstractQueuedSynchronizer.this;
         }
 
         /**
-         * Queries whether any threads are waiting on this condition.
-         * Implements {@link AbstractQueuedSynchronizer#hasWaiters(ConditionObject)}.
-         *
-         * @return {@code true} if there are any waiting threads
-         * @throws IllegalMonitorStateException if {@link #isHeldExclusively}
-         *         returns {@code false}
+         * @return 是否有在condition上等待的线程
          */
         protected final boolean hasWaiters() {
             if (!isHeldExclusively())
@@ -1732,13 +1646,7 @@ public abstract class AbstractQueuedSynchronizer
         }
 
         /**
-         * Returns an estimate of the number of threads waiting on
-         * this condition.
-         * Implements {@link AbstractQueuedSynchronizer#getWaitQueueLength(ConditionObject)}.
-         *
-         * @return the estimated number of waiting threads
-         * @throws IllegalMonitorStateException if {@link #isHeldExclusively}
-         *         returns {@code false}
+         * @return 预计的等待线程的数量
          */
         protected final int getWaitQueueLength() {
             if (!isHeldExclusively())
@@ -1752,13 +1660,8 @@ public abstract class AbstractQueuedSynchronizer
         }
 
         /**
-         * Returns a collection containing those threads that may be
-         * waiting on this Condition.
-         * Implements {@link AbstractQueuedSynchronizer#getWaitingThreads(ConditionObject)}.
-         *
-         * @return the collection of threads
-         * @throws IllegalMonitorStateException if {@link #isHeldExclusively}
-         *         returns {@code false}
+         * 返回可能等待在Condition上的线程集合
+         * @return 线程的集合
          */
         protected final Collection<Thread> getWaitingThreads() {
             if (!isHeldExclusively())

@@ -2,9 +2,6 @@ package com.webmvc.util.locks;
 
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.TimeUnit;
-import java.util.Date;
 
 
 public interface Condition {
