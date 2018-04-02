@@ -40,6 +40,8 @@ public abstract class AbstractQueuedSynchronizer
         static final int CONDITION = -2;
         /**
          * 使用在共享模式头Node有可能处于这种状态， 表示当前场景下后续的acquireShared能够得以执行
+         *
+         * PROPAGATE的引入是为了解决共享锁并发释放导致的线程hang住问题
          */
         static final int PROPAGATE = -3;
 
@@ -215,11 +217,6 @@ public abstract class AbstractQueuedSynchronizer
      * 唤起后继Node持有的线程
      */
     private void unparkSuccessor(Node node) {
-        /*
-         * If status is negative (i.e., possibly needing signal) try
-         * to clear in anticipation of signalling.  It is OK if this
-         * fails or if status is changed by waiting thread.
-         */
         int ws = node.waitStatus;
         if (ws < 0) {
             compareAndSetWaitStatus(node, ws, 0);
@@ -243,23 +240,16 @@ public abstract class AbstractQueuedSynchronizer
 
     /**
      * 共享模式下释放锁的动作
+     * 共享锁中的核心唤醒函数
+     * 后继线程被唤醒后，会尝试获取共享锁，如果成功之后，则又会调用setHeadAndPropagate,将唤醒传播下去
      */
     private void doReleaseShared() {
-        /*
-         * Ensure that a release propagates, even if there are other
-         * in-progress acquires/releases.  This proceeds in the usual
-         * way of trying to unparkSuccessor of head if it needs
-         * signal. But if it does not, status is set to PROPAGATE to
-         * ensure that upon release, propagation continues.
-         * Additionally, we must loop in case a new node is added
-         * while we are doing this. Also, unlike other uses of
-         * unparkSuccessor, we need to know if CAS to reset status
-         * fails, if so rechecking.
-         */
         for (;;) {
             Node h = head;
             if (h != null && h != tail) {
+                // 获取头节点对应的线程的状态
                 int ws = h.waitStatus;
+                // 如果头节点对应的线程是SIGNAL状态，则意味着“头节点的下一个节点所对应的线程”需要被unpark唤醒。
                 if (ws == Node.SIGNAL) {
                     if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0)) {
                         continue;            // loop to recheck cases
@@ -269,7 +259,8 @@ public abstract class AbstractQueuedSynchronizer
                     continue;                // loop on failed CAS
                 }
             }
-            if (h == head) {               // loop if head changed
+            // 如果头节点发生变化，则继续循环。否则，退出循环。
+            if (h == head) {
                 break;
             }
         }
@@ -530,7 +521,7 @@ public abstract class AbstractQueuedSynchronizer
                 if (p == head) {
                     int r = tryAcquireShared(arg);
                     if (r >= 0) {
-                    	//获取锁成功 
+                    	//如果成功获取锁，就设置head并传播
                         setHeadAndPropagate(node, r);
                         p.next = null; // help GC
                         if (interrupted) {

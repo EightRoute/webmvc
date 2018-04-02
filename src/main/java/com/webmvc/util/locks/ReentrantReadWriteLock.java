@@ -720,7 +720,7 @@ public class ReentrantReadWriteLock
     }
 
     /**
-     * @param condition对象
+     * @param condition 对象
      * @return 是否有线程在condition的等待队列中
      */
     public boolean hasWaiters(Condition condition) {
