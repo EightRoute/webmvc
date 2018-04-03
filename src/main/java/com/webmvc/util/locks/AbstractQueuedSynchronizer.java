@@ -34,7 +34,7 @@ public abstract class AbstractQueuedSynchronizer
          * 被取消的Node不应该去竞争锁，只能保持取消状态不变，
          * 不能转换为其他状态，处于这种状态的Node会被踢出队列，被GC回收 */
         static final int CANCELLED =  1;
-        /** 表示这个Node的继任Node被阻塞了，到时需要通知它*/
+        /** 表示这个Node的后继Node被阻塞了，到时需要通知它*/
         static final int SIGNAL    = -1;
         /** 表示这个Node在条件队列中，因为等待某个条件而被阻塞 */
         static final int CONDITION = -2;
@@ -254,6 +254,7 @@ public abstract class AbstractQueuedSynchronizer
                     if (!compareAndSetWaitStatus(h, Node.SIGNAL, 0)) {
                         continue;            // loop to recheck cases
                     }
+                    //唤醒后继节点
                     unparkSuccessor(h);
                 } else if (ws == 0 && !compareAndSetWaitStatus(h, 0, Node.PROPAGATE)) {
                     continue;                // loop on failed CAS
@@ -267,27 +268,12 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
-     * 先把当前节点设为为头节点，调用doReleaseShared方法
+     * 先把当前节点设为为头节点，调用doReleaseShared方法唤醒线程
      */
     private void setHeadAndPropagate(Node node, int propagate) {
         Node h = head; // Record old head for check below
         setHead(node);
-        /*
-         * Try to signal next queued node if:
-         *   Propagation was indicated by caller,
-         *     or was recorded (as h.waitStatus either before
-         *     or after setHead) by a previous operation
-         *     (note: this uses sign-check of waitStatus because
-         *      PROPAGATE status may transition to SIGNAL.)
-         * and
-         *   The next node is waiting in shared mode,
-         *     or we don't know, because it appears null
-         *
-         * The conservatism in both of these checks may cause
-         * unnecessary wake-ups, but only when there are multiple
-         * racing acquires/releases, so most need signals now or soon
-         * anyway.
-         */
+       
         if (propagate > 0 || h == null || h.waitStatus < 0 ||
             (h = head) == null || h.waitStatus < 0) {
             Node s = node.next;
@@ -303,41 +289,40 @@ public abstract class AbstractQueuedSynchronizer
      * 取消正在进行的Node获取锁的尝试
      */
     private void cancelAcquire(Node node) {
-        // Ignore if node doesn't exist
-        if (node == null)
+        if (node == null) {
             return;
+        }
 
         node.thread = null;
 
-        // Skip cancelled predecessors
+        // 跳过被取消的前驱节点
         Node pred = node.prev;
-        while (pred.waitStatus > 0)
+        while (pred.waitStatus > 0) {
             node.prev = pred = pred.prev;
+        }
 
-        // predNext is the apparent node to unsplice. CASes below will
-        // fail if not, in which case, we lost race vs another cancel
-        // or signal, so no further action is necessary.
+        // 留着CAS用
         Node predNext = pred.next;
 
-        // Can use unconditional write instead of CAS here.
-        // After this atomic step, other Nodes can skip past us.
-        // Before, we are free of interference from other threads.
+        // 将node的waitStatus改为CANCELLED
         node.waitStatus = Node.CANCELLED;
 
-        // If we are the tail, remove ourselves.
+        // 如果node是尾节点，则移除自己
         if (node == tail && compareAndSetTail(node, pred)) {
+        	//将前驱节点的下一个节点设为null
             compareAndSetNext(pred, predNext, null);
         } else {
-            // If successor needs signal, try to set pred's next-link
-            // so it will get one. Otherwise wake it up to propagate.
+            // 如果前驱节点为首节点啦就要唤醒后继线程
             int ws;
             if (pred != head &&
                 ((ws = pred.waitStatus) == Node.SIGNAL ||
                  (ws <= 0 && compareAndSetWaitStatus(pred, ws, Node.SIGNAL))) &&
                 pred.thread != null) {
                 Node next = node.next;
-                if (next != null && next.waitStatus <= 0)
+                if (next != null && next.waitStatus <= 0) {
+                	//将前驱节点的下一个节点设为next节点
                     compareAndSetNext(pred, predNext, next);
+                }
             } else {
                 unparkSuccessor(node);
             }
@@ -531,6 +516,7 @@ public abstract class AbstractQueuedSynchronizer
                         return;
                     }
                 }
+                //获取不到锁会阻塞在此，且在阻塞前会将前驱节点的状态设置为SIGNAL 
                 if (shouldParkAfterFailedAcquire(p, node) &&
                     parkAndCheckInterrupt()) {
                     interrupted = true;
@@ -544,8 +530,7 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
-     * Acquires in shared interruptible mode.
-     * @param arg the acquire argument
+     * 获取共享锁，响应中断
      */
     private void doAcquireSharedInterruptibly(int arg)
         throws InterruptedException {
@@ -564,26 +549,28 @@ public abstract class AbstractQueuedSynchronizer
                     }
                 }
                 if (shouldParkAfterFailedAcquire(p, node) &&
-                    parkAndCheckInterrupt())
+                    parkAndCheckInterrupt()) {
                     throw new InterruptedException();
+                }
             }
         } finally {
-            if (failed)
+            if (failed) {
                 cancelAcquire(node);
+            } 
         }
     }
 
     /**
-     * Acquires in shared timed mode.
+     * 超时获取共享锁
      *
-     * @param arg the acquire argument
-     * @param nanosTimeout max wait time
-     * @return {@code true} if acquired
+     * @param 最长的等待时间， 单位为纳秒
+     * @return 是否获取到锁
      */
     private boolean doAcquireSharedNanos(int arg, long nanosTimeout)
             throws InterruptedException {
-        if (nanosTimeout <= 0L)
+        if (nanosTimeout <= 0L) {
             return false;
+        }
         final long deadline = System.nanoTime() + nanosTimeout;
         final Node node = addWaiter(Node.SHARED);
         boolean failed = true;
@@ -600,17 +587,21 @@ public abstract class AbstractQueuedSynchronizer
                     }
                 }
                 nanosTimeout = deadline - System.nanoTime();
-                if (nanosTimeout <= 0L)
+                if (nanosTimeout <= 0L) {
                     return false;
+                }
                 if (shouldParkAfterFailedAcquire(p, node) &&
-                    nanosTimeout > spinForTimeoutThreshold)
+                    nanosTimeout > spinForTimeoutThreshold) {
                     LockSupport.parkNanos(this, nanosTimeout);
-                if (Thread.interrupted())
+                }
+                if (Thread.interrupted()) {
                     throw new InterruptedException();
+                }
             }
         } finally {
-            if (failed)
+            if (failed) {
                 cancelAcquire(node);
+            }
         }
     }
 
@@ -723,41 +714,25 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
-     * Acquires in shared mode, aborting if interrupted.  Implemented
-     * by first checking interrupt status, then invoking at least once
-     * {@link #tryAcquireShared}, returning on success.  Otherwise the
-     * thread is queued, possibly repeatedly blocking and unblocking,
-     * invoking {@link #tryAcquireShared} until success or the thread
-     * is interrupted.
-     * @param arg the acquire argument.
-     * This value is conveyed to {@link #tryAcquireShared} but is
-     * otherwise uninterpreted and can represent anything
-     * you like.
-     * @throws InterruptedException if the current thread is interrupted
+     * 获取共享锁，响应中断
+     * @throws InterruptedException 当前线程被中断
      */
     public final void acquireSharedInterruptibly(int arg)
             throws InterruptedException {
-        if (Thread.interrupted())
+        if (Thread.interrupted()) {
             throw new InterruptedException();
-        if (tryAcquireShared(arg) < 0)
+        }
+        if (tryAcquireShared(arg) < 0) {
             doAcquireSharedInterruptibly(arg);
+        }
     }
 
     /**
-     * Attempts to acquire in shared mode, aborting if interrupted, and
-     * failing if the given timeout elapses.  Implemented by first
-     * checking interrupt status, then invoking at least once {@link
-     * #tryAcquireShared}, returning on success.  Otherwise, the
-     * thread is queued, possibly repeatedly blocking and unblocking,
-     * invoking {@link #tryAcquireShared} until success or the thread
-     * is interrupted or the timeout elapses.
+     * 超时获取共享锁
      *
-     * @param arg the acquire argument.  This value is conveyed to
-     *        {@link #tryAcquireShared} but is otherwise uninterpreted
-     *        and can represent anything you like.
-     * @param nanosTimeout the maximum number of nanoseconds to wait
-     * @return {@code true} if acquired; {@code false} if timed out
-     * @throws InterruptedException if the current thread is interrupted
+     * @param nanosTimeout 最长的等待时间，单位为纳秒
+     * @return true代表获取到锁 false代表超时
+     * @throws InterruptedException 当前线程被中断
      */
     public final boolean tryAcquireSharedNanos(int arg, long nanosTimeout)
             throws InterruptedException {
@@ -768,13 +743,7 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
-     * Releases in shared mode.  Implemented by unblocking one or more
-     * threads if {@link #tryReleaseShared} returns true.
-     *
-     * @param arg the release argument.  This value is conveyed to
-     *        {@link #tryReleaseShared} but is otherwise uninterpreted
-     *        and can represent anything you like.
-     * @return the value returned from {@link #tryReleaseShared}
+     * 共享模式释放锁
      */
     public final boolean releaseShared(int arg) {
         if (tryReleaseShared(arg)) {
@@ -1011,11 +980,11 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
-     * Transfers node, if necessary, to sync queue after a cancelled wait.
-     * Returns true if thread was cancelled before being signalled.
-     *
+     * 当中断发生时，是否有signal发生
+     * 
+     * signal会将CONDITION变为0
      * @param node the node
-     * @return true if cancelled before the node was signalled
+     * @return 当中断发生时，没有signal发生返回true
      */
     final boolean transferAfterCancelledWait(Node node) {
         if (compareAndSetWaitStatus(node, Node.CONDITION, 0)) {
@@ -1059,12 +1028,8 @@ public abstract class AbstractQueuedSynchronizer
     // Instrumentation methods for conditions
 
     /**
-     * Queries whether the given ConditionObject
-     * uses this synchronizer as its lock.
-     *
-     * @param condition the condition
-     * @return {@code true} if owned
-     * @throws NullPointerException if the condition is null
+     * condition对象是否是当前AQS对象创建的
+     * @throws NullPointerException condition为null
      */
     public final boolean owns(ConditionObject condition) {
         return condition.isOwnedBy(this);
@@ -1245,12 +1210,12 @@ public abstract class AbstractQueuedSynchronizer
         }
 
         /*
-         * 如果中断发生在同步队列需要selfInterrupt
+         * 如果中断发生在同步队列需要selfInterrupt补一个Interrupt
          * 如果中断发生在等待队列需要抛出InterruptedException
          */
-        /** signalled后被中断 */
+        /** 发生了中断，但在后续我们不抛出中断异常 */
         private static final int REINTERRUPT =  1;
-        /** signalled前被中断 */
+        /** 代表发生了中断，且在后续我们需要抛出中断异常 */
         private static final int THROW_IE    = -1;
 
         /**
@@ -1259,6 +1224,9 @@ public abstract class AbstractQueuedSynchronizer
          *  0 : 没有被中断 
          * -1 : signalled前被中断
          *  1 : signalled后被中断
+         * 
+         * 如果中断发生在同步队列需要selfInterrupt补一个Interrupt
+         * 如果中断发生在等待队列需要抛出InterruptedException
          */
         private int checkInterruptWhileWaiting(Node node) {
             return Thread.interrupted() ?
@@ -1507,21 +1475,21 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
-     * CAS 头节点. 只被 enq 使用.
+     * CAS设置头节点. 只被 enq 使用.
      */
     private final boolean compareAndSetHead(Node update) {
         return unsafe.compareAndSwapObject(this, headOffset, null, update);
     }
 
     /**
-     * CAS 尾节点. 只被 enq 使用.
+     * CAS设置尾节点. 只被 enq 使用.
      */
     private final boolean compareAndSetTail(Node expect, Node update) {
         return unsafe.compareAndSwapObject(this, tailOffset, expect, update);
     }
 
     /**
-     * CAS waitStatus
+     * CAS设置waitStatus
      */
     private static final boolean compareAndSetWaitStatus(Node node,
                                                          int expect,
@@ -1531,7 +1499,7 @@ public abstract class AbstractQueuedSynchronizer
     }
 
     /**
-     * CAS next 
+     * CAS设置next节点 
      */
     private static final boolean compareAndSetNext(Node node,
                                                    Node expect,
