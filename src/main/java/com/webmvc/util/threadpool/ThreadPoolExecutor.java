@@ -1318,7 +1318,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * 直接抛出异常，默认策略
+     * 直接抛出异常，默认的饱和策略
      */
     public static class AbortPolicy implements RejectedExecutionHandler {
         public AbortPolicy() { }
