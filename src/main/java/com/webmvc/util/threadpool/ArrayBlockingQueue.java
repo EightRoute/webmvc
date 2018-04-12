@@ -15,20 +15,7 @@ import java.util.Spliterator;
 /**
  * 1、基于数组的先进先出队列
  * 2、数组的容量不可变
- * <p>This is a classic &quot;bounded buffer&quot;, in which a
- * fixed-sized array holds elements inserted by producers and
- * extracted by consumers.  Once created, the capacity cannot be
- * changed.  Attempts to {@code put} an element into a full queue
- * will result in the operation blocking; attempts to {@code take} an
- * element from an empty queue will similarly block.
- *
- * <p>This class supports an optional fairness policy for ordering
- * waiting producer and consumer threads.  By default, this ordering
- * is not guaranteed. However, a queue constructed with fairness set
- * to {@code true} grants threads access in FIFO order. Fairness
- * generally decreases throughput but reduces variability and avoids
- * starvation.
- *
+ * 3、可设置ReentrantLock为公平或非公平
  * 4、可迭代
  */
 public class ArrayBlockingQueue<E> extends AbstractQueue<E>
@@ -48,10 +35,6 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     /** 队列中元素的数量 */
     int count;
 
-    /*
-     * Concurrency control uses the classic two-condition algorithm
-     * found in any textbook.
-     */
 
     /** 主锁 */
     final ReentrantLock lock;
@@ -68,8 +51,6 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
      * iterator state.
      */
     transient Itrs itrs = null;
-
-    // Internal helper methods
 
     /**
      * 循环减少i
@@ -100,8 +81,6 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
      * 只有获取锁时才能调用
      */
     private void enqueue(E x) {
-        // assert lock.getHoldCount() == 1;
-        // assert items[putIndex] == null;
         final Object[] items = this.items;
         items[putIndex] = x;
         if (++putIndex == items.length) {
@@ -113,12 +92,9 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Extracts element at current take position, advances, and signals.
-     * 只有获取锁时才能调用
+     * 出队，只有获取锁时才能调用
      */
     private E dequeue() {
-        // assert lock.getHoldCount() == 1;
-        // assert items[takeIndex] != null;
         final Object[] items = this.items;
         @SuppressWarnings("unchecked")
         E x = (E) items[takeIndex];
@@ -136,15 +112,13 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Deletes item at array index removeIndex.
-     * Utility for remove(Object) and iterator.remove.
+     * 删除数组下标为removeIndex的元素
      * 只有获取锁时才能调用
      */
     void removeAt(final int removeIndex) {
-        // assert lock.getHoldCount() == 1;
-        // assert items[removeIndex] != null;
-        // assert removeIndex >= 0 && removeIndex < items.length;
+
         final Object[] items = this.items;
+        //当移除的元素正好是队列首元素，就是take元素，正常的类似出队列的操作，  
         if (removeIndex == takeIndex) {
             // removing front item; just advance
             items[takeIndex] = null;
@@ -156,14 +130,13 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
                 itrs.elementDequeued();
             }
         } else {
-            // an "interior" remove
-
-            // slide over all others up through putIndex.
+        	//因为是队列中间的值被移除了，所有后面的元素都要挨个迁移  
             final int putIndex = this.putIndex;
             for (int i = removeIndex;;) {
                 int next = i + 1;
-                if (next == items.length)
+                if (next == items.length) {
                     next = 0;
+                }
                 if (next != putIndex) {
                     items[i] = items[next];
                     i = next;
@@ -174,8 +147,9 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
                 }
             }
             count--;
-            if (itrs != null)
+            if (itrs != null) {
                 itrs.removedAt(removeIndex);
+            }
         }
         notFull.signal();
     }
@@ -189,13 +163,8 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Creates an {@code ArrayBlockingQueue} with the given (fixed)
-     * capacity and the specified access policy.
-     *
      * @param capacity 队列的容量
-     * @param fair if {@code true} then queue accesses for threads blocked
-     *        on insertion or removal, are processed in FIFO order;
-     *        if {@code false} the access order is unspecified.
+     * @param fair ReentrantLock是否为公平锁
      * @throws IllegalArgumentException 如果capacity < 1
      */
     public ArrayBlockingQueue(int capacity, boolean fair) {
@@ -209,9 +178,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
 
     /**
      * @param capacity 队列的容量
-     * @param fair if {@code true} then queue accesses for threads blocked
-     *        on insertion or removal, are processed in FIFO order;
-     *        if {@code false} the access order is unspecified.
+     * @param fair ReentrantLock是否为公平锁
      * @param c 要在初始化时加进队列的集合
      * @throws IllegalArgumentException 如果capacity < 1
      * @throws NullPointerException 集合或它的元素为null
@@ -401,18 +368,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Removes a single instance of the specified element from this queue,
-     * if it is present.  More formally, removes an element {@code e} such
-     * that {@code o.equals(e)}, if this queue contains one or more such
-     * elements.
-     * Returns {@code true} if this queue contained the specified element
-     * (or equivalently, if this queue changed as a result of the call).
-     *
-     * <p>Removal of interior elements in circular array based queues
-     * is an intrinsically slow and disruptive operation, so should
-     * be undertaken only in exceptional circumstances, ideally
-     * only when the queue is known not to be accessible by other
-     * threads.
+     * 删除队列中的一个o对象
      *
      * @param o 要被移除队列的元素
      * @return {@code true} if this queue changed as a result of the call
@@ -445,12 +401,8 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Returns {@code true} if this queue contains the specified element.
-     * More formally, returns {@code true} if and only if this queue contains
-     * at least one element {@code e} such that {@code o.equals(e)}.
-     *
-     * @param o object to be checked for containment in this queue
-     * @return {@code true} if this queue contains the specified element
+     * @param o 对象o是否包含在队列中
+     * @return 队列中是否包含对象
      */
     public boolean contains(Object o) {
         if (o == null) return false;
@@ -462,10 +414,12 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
                 final int putIndex = this.putIndex;
                 int i = takeIndex;
                 do {
-                    if (o.equals(items[i]))
+                    if (o.equals(items[i])) {
                         return true;
-                    if (++i == items.length)
+                    }
+                    if (++i == items.length) {
                         i = 0;
+                    }
                 } while (i != putIndex);
             }
             return false;
@@ -475,17 +429,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Returns an array containing all of the elements in this queue, in
-     * proper sequence.
-     *
-     * <p>The returned array will be "safe" in that no references to it are
-     * maintained by this queue.  (In other words, this method must allocate
-     * a new array).  The caller is thus free to modify the returned array.
-     *
-     * <p>This method acts as bridge between array-based and collection-based
-     * APIs.
-     *
-     * @return an array containing all of the elements in this queue
+     * @return 返回一个包含队列所有对象的数组
      */
     public Object[] toArray() {
         Object[] a;
@@ -495,9 +439,9 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
             final int count = this.count;
             a = new Object[count];
             int n = items.length - takeIndex;
-            if (count <= n)
+            if (count <= n) {
                 System.arraycopy(items, takeIndex, a, 0, count);
-            else {
+            } else {
                 System.arraycopy(items, takeIndex, a, 0, n);
                 System.arraycopy(items, 0, a, n, count - n);
             }
@@ -508,39 +452,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Returns an array containing all of the elements in this queue, in
-     * proper sequence; the runtime type of the returned array is that of
-     * the specified array.  If the queue fits in the specified array, it
-     * is returned therein.  Otherwise, a new array is allocated with the
-     * runtime type of the specified array and the size of this queue.
-     *
-     * <p>If this queue fits in the specified array with room to spare
-     * (i.e., the array has more elements than this queue), the element in
-     * the array immediately following the end of the queue is set to
-     * {@code null}.
-     *
-     * <p>Like the {@link #toArray()} method, this method acts as bridge between
-     * array-based and collection-based APIs.  Further, this method allows
-     * precise control over the runtime type of the output array, and may,
-     * under certain circumstances, be used to save allocation costs.
-     *
-     * <p>Suppose {@code x} is a queue known to contain only strings.
-     * The following code can be used to dump the queue into a newly
-     * allocated array of {@code String}:
-     *
-     *  <pre> {@code String[] y = x.toArray(new String[0]);}</pre>
-     *
-     * Note that {@code toArray(new Object[0])} is identical in function to
-     * {@code toArray()}.
-     *
-     * @param a the array into which the elements of the queue are to
-     *          be stored, if it is big enough; otherwise, a new array of the
-     *          same runtime type is allocated for this purpose
-     * @return an array containing all of the elements in this queue
-     * @throws ArrayStoreException if the runtime type of the specified array
-     *         is not a supertype of the runtime type of every element in
-     *         this queue
-     * @throws NullPointerException if the specified array is null
+     * 返回一个包含队列所有对象的数组
      */
     @SuppressWarnings("unchecked")
     public <T> T[] toArray(T[] a) {
@@ -550,9 +462,11 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         try {
             final int count = this.count;
             final int len = a.length;
-            if (len < count)
+            //给的数组容量不够大则创建一个新的
+            if (len < count) {
                 a = (T[])java.lang.reflect.Array.newInstance(
                     a.getClass().getComponentType(), count);
+            }
             int n = items.length - takeIndex;
             if (count <= n)
                 System.arraycopy(items, takeIndex, a, 0, count);
@@ -560,8 +474,10 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
                 System.arraycopy(items, takeIndex, a, 0, n);
                 System.arraycopy(items, 0, a, n, count - n);
             }
-            if (len > count)
+            if (len > count) {
+            	//标识作用
                 a[count] = null;
+            }
         } finally {
             lock.unlock();
         }
@@ -594,8 +510,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Atomically removes all of the elements from this queue.
-     * The queue will be empty after this call returns.
+     * 清空队列
      */
     public void clear() {
         final Object[] items = this.items;
@@ -746,11 +661,12 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
      * Care must be taken to keep list sweeping methods from
      * reentrantly invoking another such method, causing subtle
      * corruption bugs.
+     *  迭代器的集合，链表形式 
      */
     class Itrs {
 
         /**
-         * 虚引用
+         * 虚引用，当成缓存使用的 
          */
         private class Node extends WeakReference<Itr> {
             Node next;
@@ -767,12 +683,13 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         /** Linked list of weak iterator references */
         private Node head;
 
-        /** Used to expunge stale iterators */
+        /**用于删除老的迭代器 */
         private Node sweeper = null;
 
         private static final int SHORT_SWEEP_PROBES = 4;
         private static final int LONG_SWEEP_PROBES = 16;
 
+        //初始化函数注册迭代器到迭代器集合里面 
         Itrs(Itr initial) {
             register(initial);
         }
@@ -784,6 +701,8 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
          *
          * @param tryHarder whether to start in try-harder mode, because
          * there is known to be at least one iterator to collect
+         * 清理itrs 整理旧的过期的迭代器 所谓过期的迭代器，是被标识为none 或者是Detached就是被取走的 
+         * 这个整理动作也是很有意思，普通是循环SHORT_SWEEP_PROBES次数，一旦发现有，那就会多循环LONG_SWEEP_PROBES次数，尽力去寻找 
          */
         void doSomeSweeping(boolean tryHarder) {
             // assert lock.getHoldCount() == 1;
@@ -839,7 +758,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         }
 
         /**
-         * Adds a new iterator to the linked list of tracked iterators.
+         * 在链表的最前面加元素
          */
         void register(Itr itr) {
             // assert lock.getHoldCount() == 1;
@@ -852,7 +771,6 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
          * Notifies all iterators, and expunges any that are now stale.
          */
         void takeIndexWrapped() {
-            // assert lock.getHoldCount() == 1;
             cycles++;
             for (Node o = null, p = head; p != null;) {
                 final Itr it = p.get();
@@ -871,8 +789,9 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
                 }
                 p = next;
             }
-            if (head == null)   // no more iterators to track
+            if (head == null) {
                 itrs = null;
+            }
         }
 
         /**
@@ -925,7 +844,6 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
          * Called whenever an element has been dequeued (at takeIndex).
          */
         void elementDequeued() {
-            // assert lock.getHoldCount() == 1;
             if (count == 0)
                 queueIsEmpty();
             else if (takeIndex == 0)
@@ -935,42 +853,27 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
 
     /**
      * 迭代ArrayBlockingQueue.
-     *
-     * To maintain weak consistency with respect to puts and takes, we
-     * read ahead one slot, so as to not report hasNext true but then
-     * not have an element to return.
-     *
-     * We switch into "detached" mode (allowing prompt unlinking from
-     * itrs without help from the GC) when all indices are negative, or
-     * when hasNext returns false for the first time.  This allows the
-     * iterator to track concurrent updates completely accurately,
-     * except for the corner case of the user calling Iterator.remove()
-     * after hasNext() returned false.  Even in this case, we ensure
-     * that we don't remove the wrong element by keeping track of the
-     * expected element to remove, in lastItem.  Yes, we may fail to
-     * remove lastItem from the queue if it moved due to an interleaved
-     * interior remove while in detached mode.
      */
     private class Itr implements Iterator<E> {
         /** Index to look for new nextItem; NONE at end */
         private int cursor;
 
-        /** Element to be returned by next call to next(); null if none */
+        /** 下一次调用next()返回的元素; 如果没有则为null*/
         private E nextItem;
 
-        /** Index of nextItem; NONE if none, REMOVED if removed elsewhere */
+        /** nextItem的下标; 如果没有则为NONE, 被删除了则为REMOVED */
         private int nextIndex;
 
-        /** Last element returned; null if none or not detached. */
+        /** 上一次返回的元素， null if none or not detached. */
         private E lastItem;
 
-        /** Index of lastItem, NONE if none, REMOVED if removed elsewhere */
+        /** lastItem的下标, 如果没有则为NONE, 被删除了则为REMOVED */
         private int lastRet;
 
-        /** Previous value of takeIndex, or DETACHED when detached */
+        /** 之前takeIndex的值, 被detached后为DETACHED */
         private int prevTakeIndex;
 
-        /** Previous value of iters.cycles */
+        /** 之前迭代的次数，和Cycles进行比对，就知道有没有再循环过 */
         private int prevCycles;
 
         /** Special index value indicating "not available" or "undefined" */
@@ -982,11 +885,10 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
          */
         private static final int REMOVED = -2;
 
-        /** Special value for prevTakeIndex indicating "detached mode" */
+        /** 要从itrs中删除方便gc */
         private static final int DETACHED = -3;
 
         Itr() {
-            // assert lock.getHoldCount() == 0;
             lastRet = NONE;
             final ReentrantLock lock = ArrayBlockingQueue.this.lock;
             lock.lock();
@@ -1001,6 +903,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
                     prevTakeIndex = takeIndex;
                     nextItem = itemAt(nextIndex = takeIndex);
                     cursor = incCursor(takeIndex);
+                    //将Itr对象加到Itrs链表中
                     if (itrs == null) {
                         itrs = new Itrs(this);
                     } else {
@@ -1008,10 +911,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
                         itrs.doSomeSweeping(false);
                     }
                     prevCycles = itrs.cycles;
-                    // assert takeIndex >= 0;
-                    // assert prevTakeIndex == takeIndex;
-                    // assert nextIndex >= 0;
-                    // assert nextItem != null;
+
                 }
             } finally {
                 lock.unlock();
@@ -1019,43 +919,45 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         }
 
         boolean isDetached() {
-            // assert lock.getHoldCount() == 1;
             return prevTakeIndex < 0;
         }
 
+        //index+1
         private int incCursor(int index) {
-            // assert lock.getHoldCount() == 1;
-            if (++index == items.length)
+            if (++index == items.length) {
                 index = 0;
-            if (index == putIndex)
+            }
+            if (index == putIndex) {
                 index = NONE;
+            }
             return index;
         }
 
         /**
-         * Returns true if index is invalidated by the given number of
-         * dequeues, starting from prevTakeIndex.
+         * 判断所记录的last，next cursor 还是不是原值如果不是，这个迭代器就判定detach  .
+         * @param prevTakeIndex 上一个出队的下标
+         * @param dequeues takeIndex的偏移量
+         * @param length 存储队列的数组的长度
+         * 
          */
         private boolean invalidated(int index, int prevTakeIndex,
                                     long dequeues, int length) {
-            if (index < 0)
+            if (index < 0) {
                 return false;
+            }
             int distance = index - prevTakeIndex;
-            if (distance < 0)
+            if (distance < 0) {
                 distance += length;
+            }
             return dequeues > distance;
         }
 
         /**
-         * Adjusts indices to incorporate all dequeues since the last
-         * operation on this iterator.  Call only from iterating thread.
+         * 发现元素发生移动，通过判定cycle等信息，然后cursor取值游标就重新从takeIndex开始 
+         * 下面如果发现所有记录标志的值发生变化，就直接清理本迭代器了
          */
         private void incorporateDequeues() {
-            // assert lock.getHoldCount() == 1;
-            // assert itrs != null;
-            // assert !isDetached();
-            // assert count > 0;
-
+        	
             final int cycles = itrs.cycles;
             final int takeIndex = ArrayBlockingQueue.this.takeIndex;
             final int prevCycles = this.prevCycles;
@@ -1063,22 +965,24 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
 
             if (cycles != prevCycles || takeIndex != prevTakeIndex) {
                 final int len = items.length;
-                // how far takeIndex has advanced since the previous
-                // operation of this iterator
+                // takeIndex的偏移量
                 long dequeues = (cycles - prevCycles) * len
                     + (takeIndex - prevTakeIndex);
 
-                // Check indices for invalidation
-                if (invalidated(lastRet, prevTakeIndex, dequeues, len))
+                // 判断所记录的last，next cursor 还是不是原值如果不是，这个迭代器就判定detach  
+                if (invalidated(lastRet, prevTakeIndex, dequeues, len)) {
                     lastRet = REMOVED;
-                if (invalidated(nextIndex, prevTakeIndex, dequeues, len))
+                }
+                if (invalidated(nextIndex, prevTakeIndex, dequeues, len)) {
                     nextIndex = REMOVED;
-                if (invalidated(cursor, prevTakeIndex, dequeues, len))
+                }
+                if (invalidated(cursor, prevTakeIndex, dequeues, len)) {
                     cursor = takeIndex;
+                }
 
-                if (cursor < 0 && nextIndex < 0 && lastRet < 0)
+                if (cursor < 0 && nextIndex < 0 && lastRet < 0) {
                     detach();
-                else {
+                } else {
                     this.prevCycles = cycles;
                     this.prevTakeIndex = takeIndex;
                 }
@@ -1086,19 +990,28 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         }
 
         /**
-         * Called when itrs should stop tracking this iterator, either
-         * because there are no more indices to update (cursor < 0 &&
-         * nextIndex < 0 && lastRet < 0) or as a special exception, when
-         * lastRet >= 0, because hasNext() is about to return false for the
-         * first time.  Call only from iterating thread.
+		 * 因为takeIndex等于0了，意味着开始下一个循环了. 
+		 * 然后通知所有的迭代器，删除无用的迭代器。 
+		 *
+		 * @return 是否要将当前itr对象从itrs中删除
+		 */
+		boolean takeIndexWrapped() {
+		    if (isDetached()) {
+		        return true;
+		    }
+		    if (itrs.cycles - prevCycles > 1) {
+		        // All the elements that existed at the time of the last
+		        // operation are gone, so abandon further iteration.
+		        shutdown();
+		        return true;
+		    }
+		    return false;
+		}
+
+		/**
+         * 将prevTakeIndex变为DETACHED状态，方便gc
          */
         private void detach() {
-            // Switch to detached mode
-            // assert lock.getHoldCount() == 1;
-            // assert cursor == NONE;
-            // assert nextIndex < 0;
-            // assert lastRet < 0 || nextItem == null;
-            // assert lastRet < 0 ^ lastItem != null;
             if (prevTakeIndex >= 0) {
                 // assert itrs != null;
                 prevTakeIndex = DETACHED;
@@ -1108,53 +1021,49 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         }
 
         /**
-         * For performance reasons, we would like not to acquire a lock in
-         * hasNext in the common case.  To allow for this, we only access
-         * fields (i.e. nextItem) that are not modified by update operations
-         * triggered by queue modifications.
+         * 是否还有下一个.
          */
         public boolean hasNext() {
-            // assert lock.getHoldCount() == 0;
-            if (nextItem != null)
+            if (nextItem != null) {
                 return true;
+            }
             noNext();
             return false;
         }
 
+        /*
+         * 如果没有下一个啦，将prevTakeIndex变为DETACHED状态，方便gc
+         */
         private void noNext() {
             final ReentrantLock lock = ArrayBlockingQueue.this.lock;
             lock.lock();
             try {
-                // assert cursor == NONE;
-                // assert nextIndex == NONE;
                 if (!isDetached()) {
-                    // assert lastRet >= 0;
-                    incorporateDequeues(); // might update lastRet
+                    incorporateDequeues(); // 可能修改了lastRet
                     if (lastRet >= 0) {
                         lastItem = itemAt(lastRet);
-                        // assert lastItem != null;
                         detach();
                     }
                 }
-                // assert isDetached();
-                // assert lastRet < 0 ^ lastItem != null;
             } finally {
                 lock.unlock();
             }
         }
 
+        /**
+         * 获取下一个元素
+         */
         public E next() {
-            // assert lock.getHoldCount() == 0;
             final E x = nextItem;
-            if (x == null)
+            if (x == null) {
                 throw new NoSuchElementException();
+            }
             final ReentrantLock lock = ArrayBlockingQueue.this.lock;
             lock.lock();
             try {
-                if (!isDetached())
+                if (!isDetached()) {
                     incorporateDequeues();
-                // assert nextIndex != NONE;
-                // assert lastItem == null;
+                }
                 lastRet = nextIndex;
                 final int cursor = this.cursor;
                 if (cursor >= 0) {
@@ -1171,19 +1080,23 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
             return x;
         }
 
+        /**
+         * 删除上一次返回的元素
+         */
         public void remove() {
             // assert lock.getHoldCount() == 0;
             final ReentrantLock lock = ArrayBlockingQueue.this.lock;
             lock.lock();
             try {
-                if (!isDetached())
+                if (!isDetached()) {
                     incorporateDequeues(); // might update lastRet or detach
+                }
                 final int lastRet = this.lastRet;
                 this.lastRet = NONE;
                 if (lastRet >= 0) {
-                    if (!isDetached())
+                    if (!isDetached()) {
                         removeAt(lastRet);
-                    else {
+                    } else {
                         final E lastItem = this.lastItem;
                         // assert lastItem != null;
                         this.lastItem = null;
@@ -1196,20 +1109,16 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
                 // previously asynchronously removed via an operation other
                 // than this.remove(), so nothing to do.
 
-                if (cursor < 0 && nextIndex < 0)
+                if (cursor < 0 && nextIndex < 0) {
                     detach();
+                }
             } finally {
                 lock.unlock();
-                // assert lastRet == NONE;
-                // assert lastItem == null;
             }
         }
 
         /**
-         * Called to notify the iterator that the queue is empty, or that it
-         * has fallen hopelessly behind, so that it should abandon any
-         * further iteration, except possibly to return one more element
-         * from next(), as promised by returning true from hasNext().
+         * 将所有的标志位都标记成remove ，null 
          */
         void shutdown() {
             // assert lock.getHoldCount() == 1;
@@ -1221,10 +1130,6 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
                 lastItem = null;
             }
             prevTakeIndex = DETACHED;
-            // Don't set nextItem to null because we must continue to be
-            // able to return it on next().
-            //
-            // Caller will unlink from itrs when convenient.
         }
 
         private int distance(int index, int prevTakeIndex, int length) {
@@ -1235,14 +1140,12 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         }
 
         /**
-         * Called whenever an interior remove (not at takeIndex) occurred.
-         *
-         * @return true if this iterator should be unlinked from itrs
+         * @return 是否要将当前itr对象从itrs中删除
          */
         boolean removedAt(int removedIndex) {
-            // assert lock.getHoldCount() == 1;
-            if (isDetached())
+            if (isDetached()) {
                 return true;
+            }
 
             final int cycles = itrs.cycles;
             final int takeIndex = ArrayBlockingQueue.this.takeIndex;
@@ -1250,38 +1153,39 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
             final int prevTakeIndex = this.prevTakeIndex;
             final int len = items.length;
             int cycleDiff = cycles - prevCycles;
-            if (removedIndex < takeIndex)
+            if (removedIndex < takeIndex) {
                 cycleDiff++;
+            }
             final int removedDistance =
                 (cycleDiff * len) + (removedIndex - prevTakeIndex);
-            // assert removedDistance >= 0;
             int cursor = this.cursor;
             if (cursor >= 0) {
                 int x = distance(cursor, prevTakeIndex, len);
                 if (x == removedDistance) {
-                    if (cursor == putIndex)
+                    if (cursor == putIndex) {
                         this.cursor = cursor = NONE;
-                }
-                else if (x > removedDistance) {
-                    // assert cursor != prevTakeIndex;
+                    }
+                } else if (x > removedDistance) {
                     this.cursor = cursor = dec(cursor);
                 }
             }
             int lastRet = this.lastRet;
             if (lastRet >= 0) {
                 int x = distance(lastRet, prevTakeIndex, len);
-                if (x == removedDistance)
+                if (x == removedDistance) {
                     this.lastRet = lastRet = REMOVED;
-                else if (x > removedDistance)
+                } else if (x > removedDistance) {
                     this.lastRet = lastRet = dec(lastRet);
+                }
             }
             int nextIndex = this.nextIndex;
             if (nextIndex >= 0) {
                 int x = distance(nextIndex, prevTakeIndex, len);
-                if (x == removedDistance)
+                if (x == removedDistance) {
                     this.nextIndex = nextIndex = REMOVED;
-                else if (x > removedDistance)
+                } else if (x > removedDistance) {
                     this.nextIndex = nextIndex = dec(nextIndex);
+                }
             }
             else if (cursor < 0 && nextIndex < 0 && lastRet < 0) {
                 this.prevTakeIndex = DETACHED;
@@ -1290,42 +1194,8 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
             return false;
         }
 
-        /**
-         * Called whenever takeIndex wraps around to zero.
-         *
-         * @return true if this iterator should be unlinked from itrs
-         */
-        boolean takeIndexWrapped() {
-            // assert lock.getHoldCount() == 1;
-            if (isDetached())
-                return true;
-            if (itrs.cycles - prevCycles > 1) {
-                // All the elements that existed at the time of the last
-                // operation are gone, so abandon further iteration.
-                shutdown();
-                return true;
-            }
-            return false;
-        }
-
     }
 
-    /**
-     * Returns a {@link Spliterator} over the elements in this queue.
-     *
-     * <p>The returned spliterator is
-     * <a href="package-summary.html#Weakly"><i>weakly consistent</i></a>.
-     *
-     * <p>The {@code Spliterator} reports {@link Spliterator#CONCURRENT},
-     * {@link Spliterator#ORDERED}, and {@link Spliterator#NONNULL}.
-     *
-     * @implNote
-     * The {@code Spliterator} implements {@code trySplit} to permit limited
-     * parallelism.
-     *
-     * @return a {@code Spliterator} over the elements in this queue
-     * @since 1.8
-     */
     public Spliterator<E> spliterator() {
         return Spliterators.spliterator
             (this, Spliterator.ORDERED | Spliterator.NONNULL |
