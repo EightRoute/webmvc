@@ -332,6 +332,7 @@ public class HashMap<K, V> extends AbstractMap<K, V>
 				/*遍历链表,如果没有找到相同的key则在最后增加一个Node*/
 				for (int binCount = 0; ;++binCount) {
 					if ((e = p.next) == null) {
+						//LinkedHashMap中重写了newNode方法
 						p.next = newNode(hash, key, value, null);
 						//遍历table[i]，判断链表长度是否大于TREEIFY_THRESHOLD(默认值为8)，大于8的话把链表转换为红黑树，在红黑树中执行插入操作，否则进行链表的插入操作
 						if (binCount >= TREEIFY_THRESHOLD - 1) {
@@ -375,6 +376,7 @@ public class HashMap<K, V> extends AbstractMap<K, V>
         size = 0;
     }
 	
+	/*LinkedHashMap中重写*/
 	void afterNodeAccess(Node<K, V> p) {}
 	void afterNodeInsertion(boolean evict) {}
 	void afterNodeRemoval(Node<K, V> p) {}

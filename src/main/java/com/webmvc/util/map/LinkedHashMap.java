@@ -148,6 +148,7 @@ public class LinkedHashMap<K, V> extends HashMap<K, V>
         }
     }
 
+
     void afterNodeInsertion(boolean evict) { 
         LinkedHashMap.Entry<K,V> first;
         // removeEldestEntry(first) 目前为false
