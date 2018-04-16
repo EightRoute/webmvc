@@ -1028,7 +1028,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * Starts所有的core线程
+     * 启动所有的core线程
      *
      * @return 多少个线程被启动
      */
@@ -1076,8 +1076,9 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         if (maximumPoolSize <= 0 || maximumPoolSize < corePoolSize)
             throw new IllegalArgumentException();
         this.maximumPoolSize = maximumPoolSize;
-        if (workerCountOf(ctl.get()) > maximumPoolSize)
+        if (workerCountOf(ctl.get()) > maximumPoolSize) {
             interruptIdleWorkers();
+        }
     }
 
     /**
@@ -1117,8 +1118,6 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     public long getKeepAliveTime(TimeUnit unit) {
         return unit.convert(keepAliveTime, TimeUnit.NANOSECONDS);
     }
-
-    /* User-level queue utilities */
 
     /**
      * @return 任务队列
